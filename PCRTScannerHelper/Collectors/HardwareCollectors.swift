@@ -58,7 +58,7 @@ extension MacCollectors {
         let profiler = systemProfiler(context, dataTypes: ["SPPowerDataType"], key: "system-profiler-power", timeout: 120)
         let pmset = command(context, key: "pmset-batt", executable: "/usr/bin/pmset", arguments: ["-g", "batt"])
         let powerSource = command(context, key: "pmset-ps", executable: "/usr/bin/pmset", arguments: ["-g", "ps"])
-        let flat = profiler.1.map(SystemUtilities.flatten) ?? [:]
+        let flat = profiler.1.map { SystemUtilities.flatten($0) } ?? [:]
         var rows = flat.filter { key, _ in
             ["cycle_count", "condition", "maximum_capacity", "full_charge_capacity", "charge_remaining", "charging", "fully_charged", "connected"].contains(where: { key.localizedCaseInsensitiveContains($0) })
         }.sorted { $0.key < $1.key }.map { [$0.key, $0.value] }

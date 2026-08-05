@@ -58,7 +58,7 @@ extension MacCollectors {
         let pressure = command(context, key: "memory-pressure", executable: "/usr/bin/memory_pressure", timeout: 30)
         let profiler = systemProfiler(context, dataTypes: ["SPMemoryDataType"], key: "system-profiler-memory", timeout: 120)
         let installed = UInt64(SystemUtilities.trimmed(memsize.stdout)) ?? ProcessInfo.processInfo.physicalMemory
-        let flat = profiler.1.map(SystemUtilities.flatten) ?? [:]
+        let flat = profiler.1.map { SystemUtilities.flatten($0) } ?? [:]
         let rows = flat.sorted { $0.key < $1.key }.prefix(120).map { [$0.key, $0.value] }
         context.appendInventory(InventorySection(title: "Memory", items: ["Installed memory": SystemUtilities.humanBytes(installed), "Memory pressure summary": SystemUtilities.firstLine(pressure.combinedOutput)], tables: [InventoryTable(title: "Memory hardware", columns: ["Property", "Value"], rows: Array(rows))]))
         let status: CheckStatus = memsize.exitCode == 0 ? .info : .incomplete
