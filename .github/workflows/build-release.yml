@@ -19,7 +19,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode 16 for macOS 11 deployment support
         shell: bash
@@ -63,9 +63,6 @@ jobs:
 
       - name: Test shared Swift package
         run: swift test --package-path Packages/PCRTCore
-
-      - name: Resolve local package dependencies
-        run: xcodebuild -resolvePackageDependencies -project PCRTDiagnosticsMac.xcodeproj -scheme PCRTDiagnosticsMac
 
       - name: Run Xcode unit tests
         run: |
@@ -177,7 +174,7 @@ jobs:
       contents: write
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
