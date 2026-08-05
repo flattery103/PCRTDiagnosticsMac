@@ -53,8 +53,8 @@ extension MacCollectors {
             if let value = percentageUsed { details.append("\(device) NVMe percentage used: \(value)%") }
             if let value = availableSpare { details.append("\(device) available spare: \(value)%") }
             if let value = spareThreshold { details.append("\(device) available-spare threshold: \(value)%") }
-            if let value = mediaErrors { details.append("\(device) media/data-integrity errors: \(value)") }
-            if let value = errorEntries { details.append("\(device) NVMe error-log entries: \(value)") }
+            details.append("\(device) media/data-integrity errors: \(mediaErrors)")
+            details.append("\(device) NVMe error-log entries: \(errorEntries)")
             if let value = unsafeShutdowns { details.append("\(device) unsafe shutdowns: \(value)") }
             if let value = powerOnHours { details.append("\(device) power-on hours: \(value)") }
             if let value = powerCycles { details.append("\(device) power cycles: \(value)") }
