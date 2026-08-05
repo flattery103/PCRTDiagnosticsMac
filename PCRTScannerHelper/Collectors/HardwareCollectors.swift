@@ -43,6 +43,9 @@ private struct MetalResources {
     let output: MTLBuffer
     let texture: MTLTexture
     let elementCount: Int
+    let computeRounds: Int
+    let computePasses: Int
+    let renderPasses: Int
 }
 
 extension MacCollectors {
@@ -212,8 +215,9 @@ extension MacCollectors {
         let first = batterySnapshot(context, key: "ioreg-battery-initial")
         let flat = profiler.1.map { SystemUtilities.flatten($0) } ?? [:]
         let combinedProfiler = flat.values.joined(separator: " ")
-        let condition = firstMatchingValue(flat, keyContainsAny: ["battery_health", "condition"]) ?? "Not reported"
-        let maximumCapacityPercent = parsePercentage(firstMatchingValue(flat, keyContainsAny: ["maximum_capacity"]) ?? "")
+        let profilerHealth = batteryHealthFromProfiler(profiler.1)
+        let condition = profilerHealth.condition ?? "Not reported"
+        let maximumCapacityPercent = profilerHealth.maximumCapacityPercent
         let batteryPresent = first != nil || !pmset.stdout.localizedCaseInsensitiveContains("No batteries") && flat.keys.contains(where: { $0.localizedCaseInsensitiveContains("battery") })
 
         guard batteryPresent else {
@@ -488,6 +492,7 @@ extension MacCollectors {
         details.insert("Validated compute values: \(computeValidations)", at: 3)
         details.insert("Validated render pixels: \(renderValidations)", at: 4)
         details.insert("Highest thermal pressure during GPU workload: \(highestThermal)", at: 5)
+        details.insert("Metal workload shape: \(resources.elementCount) compute elements × \(resources.computeRounds) rounds × \(resources.computePasses) dispatches; \(resources.texture.width)×\(resources.texture.height) render target × \(resources.renderPasses) draws per command buffer", at: 6)
         for name in ["Nominal", "Fair", "Serious", "Critical"] {
             details.append("GPU workload thermal samples \(name.lowercased()): \(thermalCounts[name, default: 0])")
         }
@@ -561,6 +566,18 @@ extension MacCollectors {
         for volume in volumes {
             try context.cancellation.throwIfCancelled()
             details.append("\(volume.mountPoint): \(volume.name), \(volume.filesystem), parent \(volume.parentWholeDisk), writable \(volume.writable ? "Yes" : "No"), free \(SystemUtilities.humanBytes(volume.availableBytes))")
+            let verifyKey = volume.identifier.replacingOccurrences(of: "/", with: "-")
+            let verify = command(context, key: "external-verify-volume-\(verifyKey)", executable: "/usr/sbin/diskutil", arguments: ["verifyVolume", volume.mountPoint], timeout: 180)
+            let verifyText = verify.combinedOutput
+            if verify.exitCode == 0 {
+                details.append("\(volume.mountPoint) live filesystem verification: Pass")
+            } else if containsConfirmedFilesystemFailure(verifyText) {
+                failures.append("\(volume.mountPoint) live filesystem verification reported corruption or an unrepaired filesystem error.")
+                details.append("\(volume.mountPoint) live filesystem verification: Fail (\(SystemUtilities.firstLine(verifyText)))")
+            } else {
+                warnings.append("\(volume.mountPoint) live filesystem verification could not be completed.")
+                details.append("\(volume.mountPoint) live filesystem verification: Incomplete (\(SystemUtilities.firstLine(verifyText)))")
+            }
             guard volume.writable, volume.availableBytes >= 256 * 1024 * 1024 else {
                 unavailableWrites += 1
                 rawVolumes.append(.object([
@@ -605,6 +622,10 @@ extension MacCollectors {
 
         let afterDisks = physicalDisks(context, keyPrefix: "external-after-").filter { !$0.internalDisk || $0.removable }
         let beforeByID = Dictionary(uniqueKeysWithValues: beforeDisks.map { ($0.identifier, $0) })
+        let afterByID = Dictionary(uniqueKeysWithValues: afterDisks.map { ($0.identifier, $0) })
+        for missingIdentifier in Set(beforeByID.keys).subtracting(afterByID.keys).sorted() {
+            warnings.append("/dev/\(missingIdentifier) was no longer detected after the external-drive workload; review the cable, enclosure, port, and power source.")
+        }
         for disk in afterDisks {
             if let temperature = disk.temperatureCelsius, temperature >= 80 {
                 warnings.append(String(format: "/dev/%@ reached a high external-drive temperature of %.1f °C.", disk.identifier, temperature))
@@ -647,16 +668,29 @@ extension MacCollectors {
         )
     }
 
+    private static func batteryHealthFromProfiler(_ object: Any?) -> (condition: String?, maximumCapacityPercent: Int?) {
+        guard let root = object as? [String: Any],
+              let entries = root["SPPowerDataType"] as? [[String: Any]] else { return (nil, nil) }
+        for entry in entries {
+            guard let health = entry["sppower_battery_health_info"] as? [String: Any] else { continue }
+            let condition = health["sppower_battery_health"] as? String
+            let percentText = health["sppower_battery_health_maximum_capacity"] as? String
+            return (condition, parsePercentage(percentText ?? ""))
+        }
+        return (nil, nil)
+    }
+
     private static func batterySnapshot(_ context: DiagnosticContext, key: String) -> BatterySnapshot? {
         let result = command(context, key: key, executable: "/usr/sbin/ioreg", arguments: ["-r", "-c", "AppleSmartBattery", "-a"], timeout: 20)
         guard result.exitCode == 0,
               let data = result.stdout.data(using: .utf8),
               let dictionary = batteryDictionary(data) else { return nil }
         let adapter = dictionary["AdapterDetails"] as? [String: Any]
+        let batteryData = dictionary["BatteryData"] as? [String: Any]
         return BatterySnapshot(
-            currentCapacity: numericInt64(dictionary["CurrentCapacity"]),
-            maximumCapacity: numericInt64(dictionary["MaxCapacity"]),
-            designCapacity: numericInt64(dictionary["DesignCapacity"]),
+            currentCapacity: numericInt64(dictionary["AppleRawCurrentCapacity"]) ?? numericInt64(batteryData?["CurrentCapacity"]),
+            maximumCapacity: numericInt64(dictionary["AppleRawMaxCapacity"]) ?? numericInt64(batteryData?["FccComp1"]) ?? numericInt64(dictionary["NominalChargeCapacity"]),
+            designCapacity: numericInt64(dictionary["DesignCapacity"]) ?? numericInt64(batteryData?["DesignCapacity"]),
             voltageMillivolts: numericInt64(dictionary["Voltage"]),
             amperageMilliamps: numericInt64(dictionary["Amperage"]),
             temperatureCelsius: batteryTemperatureCelsius(numericInt64(dictionary["Temperature"])),
@@ -701,6 +735,9 @@ extension MacCollectors {
             }
         }
 
+        let computeRounds = 256
+        let computePasses = 4
+        let renderPasses = 4
         let source = """
         #include <metal_stdlib>
         using namespace metal;
@@ -710,7 +747,7 @@ extension MacCollectors {
                                  constant uint &seed [[buffer(2)]],
                                  uint id [[thread_position_in_grid]]) {
             uint value = input[id] ^ seed ^ 0xA5A5A5A5u;
-            for (uint round = 0; round < 64; ++round) {
+            for (uint round = 0; round < \(computeRounds); ++round) {
                 value = value * 1664525u + 1013904223u + round;
             }
             output[id] = value;
@@ -737,7 +774,7 @@ extension MacCollectors {
         renderDescriptor.colorAttachments[0].pixelFormat = .rgba8Unorm
         let renderPipeline = try device.makeRenderPipelineState(descriptor: renderDescriptor)
 
-        let elementCount = 262_144
+        let elementCount = 1_048_576
         let byteCount = elementCount * MemoryLayout<UInt32>.size
         guard let input = device.makeBuffer(length: byteCount, options: .storageModeShared),
               let output = device.makeBuffer(length: byteCount, options: .storageModeShared) else { throw MetalSetupError.buffer }
@@ -746,11 +783,11 @@ extension MacCollectors {
             pointer[index] = UInt32(truncatingIfNeeded: UInt64(index + 1) &* 2_654_435_761)
         }
 
-        let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1024, height: 1024, mipmapped: false)
+        let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 2048, height: 2048, mipmapped: false)
         textureDescriptor.usage = [.renderTarget]
         textureDescriptor.storageMode = device.hasUnifiedMemory ? .shared : .managed
         guard let texture = device.makeTexture(descriptor: textureDescriptor) else { throw MetalSetupError.texture }
-        return MetalResources(device: device, queue: queue, computePipeline: computePipeline, renderPipeline: renderPipeline, input: input, output: output, texture: texture, elementCount: elementCount)
+        return MetalResources(device: device, queue: queue, computePipeline: computePipeline, renderPipeline: renderPipeline, input: input, output: output, texture: texture, elementCount: elementCount, computeRounds: computeRounds, computePasses: computePasses, renderPasses: renderPasses)
     }
 
     private static func runMetalCommand(resources: MetalResources, seed: UInt32, validate: Bool) throws -> (validatedComputeValues: Int, validatedRenderPixels: Int) {
@@ -781,7 +818,9 @@ extension MacCollectors {
         let width = resources.computePipeline.threadExecutionWidth
         let threadsPerGroup = MTLSize(width: width, height: 1, depth: 1)
         let grid = MTLSize(width: resources.elementCount, height: 1, depth: 1)
-        compute.dispatchThreads(grid, threadsPerThreadgroup: threadsPerGroup)
+        for _ in 0..<resources.computePasses {
+            compute.dispatchThreads(grid, threadsPerThreadgroup: threadsPerGroup)
+        }
         compute.endEncoding()
 
         let renderPass = MTLRenderPassDescriptor()
@@ -791,7 +830,9 @@ extension MacCollectors {
         renderPass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         guard let render = commandBuffer.makeRenderCommandEncoder(descriptor: renderPass) else { throw MetalRunError.encoder }
         render.setRenderPipelineState(resources.renderPipeline)
-        render.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        for _ in 0..<resources.renderPasses {
+            render.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        }
         render.endEncoding()
         if resources.texture.storageMode == .managed, let blit = commandBuffer.makeBlitCommandEncoder() {
             blit.synchronize(resource: resources.texture)
@@ -810,7 +851,7 @@ extension MacCollectors {
         var validated = 0
         for index in Swift.stride(from: 0, to: resources.elementCount, by: stride) {
             var expected = input[index] ^ seed ^ 0xA5A5A5A5
-            for round in 0..<64 {
+            for round in 0..<resources.computeRounds {
                 expected = expected &* 1_664_525 &+ 1_013_904_223 &+ UInt32(round)
             }
             if output[index] != expected { throw MetalRunError.computeMismatch(index) }
@@ -865,6 +906,19 @@ extension MacCollectors {
             guard !trimmed.isEmpty, needles.contains(where: { lower.contains($0) }), seen.insert(trimmed).inserted else { return nil }
             return trimmed
         }
+    }
+
+    private static func containsConfirmedFilesystemFailure(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return [
+            "file system check exit code is 8",
+            "the volume could not be verified completely",
+            "the volume appears to be corrupt",
+            "problems were found with the partition map",
+            "error: fsroot tree is invalid",
+            "object map is invalid",
+            "extent ref tree is invalid"
+        ].contains(where: { lower.contains($0) })
     }
 
     private static func externalVolumeIntegrityTest(_ context: DiagnosticContext, volume: MountedExternalVolume, sizeMB: Int) throws -> (writeMBps: Double, readMBps: Double, details: [String]) {

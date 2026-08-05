@@ -48,7 +48,7 @@ final class PCRTCoreTests: XCTestCase {
     }
 
     func testReportsContainExpectedEvidenceBehavior() throws {
-        var run = DiagnosticRun(version: "0.1.2", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
+        var run = DiagnosticRun(version: "0.1.3", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
         run.results = [
             DiagnosticResult(category: "CPU", domain: "Hardware Functional", name: "CPU test", status: .pass, summary: "Passed", details: ["Evidence"]),
             DiagnosticResult(category: "Storage", domain: "Hardware Functional", name: "Disk test", status: .incomplete, summary: "Unavailable", details: ["Access denied"])

@@ -41,8 +41,8 @@ The script performs:
 Expected output:
 
 ```text
-build/release/PCRTDiagnosticsMac-0.1.2.zip
-build/release/PCRTDiagnosticsMac-0.1.2.zip.sha256
+build/release/PCRTDiagnosticsMac-0.1.3.zip
+build/release/PCRTDiagnosticsMac-0.1.3.zip.sha256
 ```
 
 ## Manual build command

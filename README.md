@@ -1,4 +1,4 @@
-# PCRT Diagnostics for macOS 0.1.2
+# PCRT Diagnostics for macOS 0.1.3
 
 Native SwiftUI macOS client for the PCRT Diagnostics Server 0.1.4 API.
 
@@ -6,19 +6,20 @@ This repository contains the complete source project for a portable `PCRT Diagno
 
 After Start and administrator approval, every diagnostic is automated. The client contains no camera, microphone, display-confirmation, keyboard, trackpad, speaker, or other interactive hardware checks.
 
-## 0.1.2 focus: unattended hardware reliability
+## 0.1.3 focus: parsing accuracy and workload stabilization
 
-Version 0.1.2 adds:
+Version 0.1.3 adds or corrects:
 
-- Deterministic Metal compute and offscreen-render validation with a sustained GPU workload.
-- Post-workload hardware-event review limited to the active diagnostic window.
-- Storage temperature, throughput, latency, native-error-counter, and SHA-256 trending.
-- Expanded battery health and an automatic charging observation when applicable.
-- Wi-Fi, IPv4, IPv6, DNS, VPN, gateway, and Internet-quality evidence.
-- Safe temporary integrity testing for writable mounted external drives.
-- Correct **Not Available** handling when macOS blocks optional raw-device access.
+- Connected-network Wi-Fi parsing with a structured `system_profiler` source and anchored `wdutil` fallback.
+- Correct battery condition, maximum-capacity percentage, and raw mAh field mapping.
+- Actionable post-workload event filtering that excludes zero-error and PCRT-generated filesystem success messages.
+- Split, bounded panic, shutdown, and launchd history queries that degrade to Info when optional logs are unavailable.
+- A heavier deterministic Metal compute and offscreen-render workload.
+- Live external-volume verification and physical-drive disconnect detection.
 
-See [`docs/AUTOMATED_RELIABILITY_0.1.2.md`](docs/AUTOMATED_RELIABILITY_0.1.2.md) and [`docs/THERMAL_STORAGE_0.1.1.md`](docs/THERMAL_STORAGE_0.1.1.md).
+The 0.1.2 unattended GPU, storage, network, battery, and external-drive checks remain in place. Optional raw-device access denied by macOS remains **Not Available**, not Incomplete.
+
+See [`docs/STABILIZATION_0.1.3.md`](docs/STABILIZATION_0.1.3.md), [`docs/AUTOMATED_RELIABILITY_0.1.2.md`](docs/AUTOMATED_RELIABILITY_0.1.2.md), and [`docs/THERMAL_STORAGE_0.1.1.md`](docs/THERMAL_STORAGE_0.1.1.md).
 
 ## Configured deployment targets
 
@@ -105,21 +106,22 @@ chmod +x Scripts/*.sh
 The expected output is:
 
 ```text
-build/release/PCRTDiagnosticsMac-0.1.2.zip
+build/release/PCRTDiagnosticsMac-0.1.3.zip
 ```
 
 ## Status policy
 
 - **Fail** is reserved for confirmed calculation mismatches, data-integrity mismatches, successful-device short/read failures, Metal command failures, or explicit native failure evidence.
 - Optional raw-device access denied by macOS is **Not Available**, not Incomplete and not Fail.
+- Expected success messages, zero-valued error fields, and PCRT-triggered filesystem verification do not create post-workload warnings.
+- Optional historical Unified Log queries may report **Info** when other baseline evidence was collected.
 - Unsupported hardware and optional capabilities are **Not Available** or **Not Applicable**.
 - Unexpected collector failures may be **Incomplete** when a check that should have run could not finish.
-- macOS updates and configuration findings remain separate from hardware conclusions.
 - No repairs, firmware changes, destructive disk tests, or forced unmounts are performed.
 
 ## Current validation status
 
-The shared `PCRTCore` Swift package contains platform-independent unit tests. Linux-hosted source checks can validate Swift syntax and project structure. The SwiftUI application, Metal workload, helper authorization, Universal 2 output, and hardware behavior require Xcode compilation and runtime validation on macOS. See `RELEASE_NOTES_0.1.2.md` for the beta validation scope.
+The shared `PCRTCore` Swift package contains platform-independent unit tests. Linux-hosted source checks can validate Swift syntax and project structure. The SwiftUI application, Metal workload, helper authorization, Universal 2 output, and hardware behavior require Xcode compilation and runtime validation on macOS. See `RELEASE_NOTES_0.1.3.md` for the beta validation scope.
 
 ## License
 

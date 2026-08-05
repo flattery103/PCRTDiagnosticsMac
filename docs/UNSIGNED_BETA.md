@@ -6,7 +6,7 @@ The app is portable. It does not need to be installed or moved into `/Applicatio
 
 ## First opening
 
-1. Download `PCRTDiagnosticsMac-0.1.2.zip`.
+1. Download `PCRTDiagnosticsMac-0.1.3.zip`.
 2. Double-click the ZIP if macOS does not extract it automatically.
 3. Leave `PCRT Diagnostics.app` in Downloads, Desktop, a technician tools folder, or external media.
 4. Control-click or right-click `PCRT Diagnostics.app` and choose **Open**.
@@ -39,8 +39,8 @@ No additional hardware-test interaction is required after the authorization dial
 Checksum verification is optional and is not required for normal users. A technician may verify the download from Terminal:
 
 ```bash
-shasum -a 256 PCRTDiagnosticsMac-0.1.2.zip
-cat PCRTDiagnosticsMac-0.1.2.zip.sha256
+shasum -a 256 PCRTDiagnosticsMac-0.1.3.zip
+cat PCRTDiagnosticsMac-0.1.3.zip.sha256
 ```
 
 The values should match exactly.

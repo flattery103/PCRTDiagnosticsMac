@@ -49,4 +49,4 @@ Server 0.1.4 can optionally require a static `X-PCRT-Token`. The macOS app inten
 
 ## Download hosting
 
-The current server upload/download administration is Windows-EXE specific. The macOS ZIP is distributed through GitHub Actions artifacts and GitHub Releases in 0.1.2. Adding a separate macOS download to the website can be handled later without changing the diagnostic API.
+The current server upload/download administration is Windows-EXE specific. The macOS ZIP is distributed through GitHub Actions artifacts and GitHub Releases in 0.1.3. Adding a separate macOS download to the website can be handled later without changing the diagnostic API.

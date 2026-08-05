@@ -12,6 +12,7 @@ from pathlib import Path
 import importlib.util
 import plistlib
 import sys
+sys.dont_write_bytecode = True
 
 version = sys.argv[1]
 spec = importlib.util.spec_from_file_location("pbxvalidator", "Scripts/validate-pbx.py")
@@ -56,6 +57,45 @@ grep -R -q "https://scan.pcrtdiag.com:8443/" Packages/PCRTCore || {
 
 if grep -R -n -E 'brew (install|upgrade)|port install|launchctl (load|bootstrap)|/Library/LaunchDaemons|/Library/PrivilegedHelperTools' PCRTDiagnosticsMac PCRTScannerHelper Packages/PCRTCore --include='*.swift'; then
   echo "Persistent install or package-manager behavior was found in Swift source" >&2
+  exit 1
+fi
+
+
+# Regression guards for the 0.1.3 stabilization fixes.
+grep -q 'spairport_current_network_information' PCRTScannerHelper/Collectors/SystemCollectors.swift || {
+  echo "Connected-network Wi-Fi parsing is missing" >&2
+  exit 1
+}
+grep -q 'AppleRawCurrentCapacity' PCRTScannerHelper/Collectors/HardwareCollectors.swift || {
+  echo "Raw battery current-capacity parsing is missing" >&2
+  exit 1
+}
+grep -q 'AppleRawMaxCapacity' PCRTScannerHelper/Collectors/HardwareCollectors.swift || {
+  echo "Raw battery full-charge-capacity parsing is missing" >&2
+  exit 1
+}
+grep -q 'isBenignZeroOrSuccessLine' PCRTScannerHelper/Collectors/SystemCollectors.swift || {
+  echo "Post-workload benign-event filtering is missing" >&2
+  exit 1
+}
+grep -q 'let computeRounds = 256' PCRTScannerHelper/Collectors/HardwareCollectors.swift || {
+  echo "The strengthened Metal compute workload is missing" >&2
+  exit 1
+}
+grep -q 'let elementCount = 1_048_576' PCRTScannerHelper/Collectors/HardwareCollectors.swift || {
+  echo "The strengthened Metal buffer size is missing" >&2
+  exit 1
+}
+grep -q 'external-verify-volume-' PCRTScannerHelper/Collectors/HardwareCollectors.swift || {
+  echo "External-volume filesystem verification is missing" >&2
+  exit 1
+}
+if grep -q 'currentCapacity: numericInt64(dictionary\["CurrentCapacity"\])' PCRTScannerHelper/Collectors/HardwareCollectors.swift; then
+  echo "Percentage-style CurrentCapacity is still being treated as mAh" >&2
+  exit 1
+fi
+if grep -q 'maximumCapacity: numericInt64(dictionary\["MaxCapacity"\])' PCRTScannerHelper/Collectors/HardwareCollectors.swift; then
+  echo "Percentage-style MaxCapacity is still being treated as mAh" >&2
   exit 1
 fi
 

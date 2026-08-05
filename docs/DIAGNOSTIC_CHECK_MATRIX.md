@@ -1,6 +1,6 @@
 # Diagnostic Check Matrix
 
-| Area | macOS 0.1.2 implementation | Typical status policy |
+| Area | macOS 0.1.3 implementation | Typical status policy |
 |---|---|---|
 | macOS inventory | `sw_vers`, `sysctl`, uptime, install history | Info; Incomplete on collector failure |
 | Mac hardware | `system_profiler SPHardwareDataType` | Info; Incomplete if unavailable |
@@ -15,15 +15,15 @@
 | Storage workload | Temperature/counter snapshots, interval throughput, block latency, complete read, SHA-256 compare | Fail on short read/hash mismatch/new media errors; Warning on high temperature or new controller evidence; speed alone is informational |
 | Physical raw sampling | 64-bit distributed offsets on validated physical `/dev/rdisk*` devices | Fail only after successful open and real short/read error; Not Available on macOS access restriction |
 | SMART/native health | `diskutil` SMART/NVMe fields, partition-map verification, optional already-installed `smartctl` | Fail on explicit native failure; Warning for reviewable wear/temperature/counter evidence; Not Available where unsupported |
-| External drives | Physical external media inventory plus bounded temporary write/read/SHA-256 test on writable mounted volumes | Fail on confirmed integrity/I/O error; Warning for native health evidence; N/A when none connected; no repair/unmount |
+| External drives | Physical external media inventory, live non-repairing filesystem verification, disconnect detection, and bounded temporary write/read/SHA-256 test on writable mounted volumes | Fail on confirmed integrity/I/O error; Warning for native health evidence; N/A when none connected; no repair/unmount |
 | Battery and charging | Power profiler, `pmset`, AppleSmartBattery details, optional 60-second charge observation | Warning on service condition, capacity below 80%, high temperature, or unexpected discharge on external power; N/A without battery |
 | USB/Thunderbolt/PCI | `system_profiler` data types | Info/Incomplete/Not Available |
 | GPU/display/Metal inventory | Display profiler and Metal device enumeration | Info/Incomplete/Not Available |
-| Metal GPU functional workload | Runtime MSL compute validation, offscreen rendering/pixel validation, sustained command buffers, concurrent thermal/power telemetry | Fail on deterministic mismatch or command-buffer error; Warning on serious/critical pressure; telemetry absence does not fail the workload |
-| Network and Wi-Fi | IPv4/IPv6 routes, repeated DNS/HTTPS, gateway/Internet latency, Wi-Fi evidence, VPN detection, optional `networkQuality` | Warning for verified connectivity/quality findings; blocked ICMP alone does not imply failure when HTTPS works; Incomplete on collector failure |
-| Post-workload events | Targeted Unified Log query from first workload start through review time | Warning for relevant storage/GPU/thermal/memory/USB/TB events; Incomplete/Not Available on logging restriction |
-| Panic/shutdown/hardware history | Bounded seven-day Unified Log and DiagnosticReports review | Warning for reviewable evidence; Incomplete on access/timeout |
-| Services | Bounded repeated launchd abnormal-exit review | Warning only when repeated; Incomplete if unavailable |
+| Metal GPU functional workload | Heavier runtime MSL compute validation, 2048×2048 offscreen rendering/pixel validation, sustained command buffers, concurrent thermal/power telemetry | Fail on deterministic mismatch or command-buffer error; Warning on serious/critical pressure; telemetry absence does not fail the workload |
+| Network and Wi-Fi | IPv4/IPv6 routes, repeated DNS/HTTPS, gateway/Internet latency, connected-network Wi-Fi evidence, VPN detection, optional `networkQuality` | Warning for verified connectivity/quality findings; blocked ICMP alone does not imply failure when HTTPS works; Incomplete on collector failure |
+| Post-workload events | Targeted Unified Log query from first workload start with explicit zero-error, cache, and PCRT-generated filesystem-success filtering | Warning for relevant storage/GPU/thermal/memory/USB/TB events; Incomplete/Not Available on logging restriction |
+| Panic/shutdown/hardware history | Separate bounded 24-hour panic/shutdown queries plus 30-day DiagnosticReports and boot/shutdown history | Warning for reviewable evidence; Info when optional Unified Log queries are unavailable but baseline evidence exists |
+| Services | Separate bounded launchd abnormal-exit, crash, and respawn review with repeated-pattern grouping | Warning only when repeated; Info when live launchd inventory exists but optional history is unavailable |
 | Updates | `softwareupdate --list` | Warning as maintenance only; never hardware failure |
 | Security/configuration | FileVault, SIP, Gatekeeper, available Secure Boot evidence | Warning for disabled controls; Incomplete/Not Available where unsupported |
 | RTC progression | Wall clock compared with monotonic continuous time | Warning on short-term inconsistency; not a CMOS test |

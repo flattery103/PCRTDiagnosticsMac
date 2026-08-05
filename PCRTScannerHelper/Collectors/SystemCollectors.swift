@@ -48,12 +48,13 @@ extension MacCollectors {
         let wdutil = FileManager.default.isExecutableFile(atPath: "/usr/bin/wdutil")
             ? command(context, key: "wdutil-info", executable: "/usr/bin/wdutil", arguments: ["info"], timeout: 30)
             : nil
-        let wifiFlat = wifi.1.map { SystemUtilities.flatten($0) } ?? [:]
-        let wifiCombined = wifiFlat.map { "\($0.key): \($0.value)" }.joined(separator: "\n") + "\n" + (wdutil?.combinedOutput ?? "")
-        let wifiSignal = parseWiFiSignal(wifiCombined)
-        let wifiRate = parseFirstDouble(wifiCombined, patterns: ["(?:Tx Rate|Transmit Rate|lastTxRate)[^0-9]*([0-9.]+)", "spairport_network_rate[^0-9]*([0-9.]+)"])
-        let wifiChannel = firstMatchingWiFiValue(wifiFlat, keyNeedles: ["channel"]) ?? parseFirstString(wifiCombined, pattern: "(?:Channel|channel)[^:]*:\\s*([^\\n]+)")
-        let wifiPHY = firstMatchingWiFiValue(wifiFlat, keyNeedles: ["phy", "mode"]) ?? firstMatchingWiFiValue(wifiFlat, keyNeedles: ["supported_phymodes"])
+        let profilerWiFi = currentWiFiSnapshot(wifi.1, preferredInterface: interface)
+        let wdutilWiFi = wdutil.flatMap { wdutilWiFiSnapshot($0.combinedOutput) }
+        let wifiSnapshot = mergeWiFiSnapshots(primary: profilerWiFi, fallback: wdutilWiFi)
+        let wifiSignal = (rssi: wifiSnapshot?.rssi, noise: wifiSnapshot?.noise, snr: wifiSnapshot?.snr)
+        let wifiRate = wifiSnapshot?.rateMbps
+        let wifiChannel = wifiSnapshot?.channel
+        let wifiPHY = wifiSnapshot?.phyMode
         let activeVPNs = activeTunnelInterfaces(ifconfig.stdout)
 
         var networkQuality: CommandResult?
@@ -126,6 +127,7 @@ extension MacCollectors {
         if let wifiRate { details.append(String(format: "Wi-Fi negotiated/transmit rate: %.1f Mbps", wifiRate)) }
         if let wifiChannel { details.append("Wi-Fi channel: \(wifiChannel)") }
         if let wifiPHY { details.append("Wi-Fi PHY mode: \(wifiPHY)") }
+        if let source = wifiSnapshot?.source { details.append("Wi-Fi evidence source: \(source)") }
         if let networkQuality {
             details.append("Built-in networkQuality: \(networkQuality.exitCode == 0 ? SystemUtilities.firstLine(networkQuality.combinedOutput) : "Unavailable (\(SystemUtilities.firstLine(networkQuality.combinedOutput)))")")
             details.append(contentsOf: selectedLines(networkQuality.combinedOutput, containingAny: ["uplink", "downlink", "responsiveness", "rpm"]).prefix(20))
@@ -184,10 +186,11 @@ extension MacCollectors {
         (eventMessage CONTAINS[c] "GPU Restart") OR
         (eventMessage CONTAINS[c] "channel exception") OR
         ((eventMessage CONTAINS[c] "IOGPU" OR eventMessage CONTAINS[c] "AGX") AND (eventMessage CONTAINS[c] "fault" OR eventMessage CONTAINS[c] "hang" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "timeout")) OR
-        ((eventMessage CONTAINS[c] "NVMe" OR eventMessage CONTAINS[c] "AppleANS") AND (eventMessage CONTAINS[c] "error" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "timeout" OR eventMessage CONTAINS[c] "critical")) OR
-        (eventMessage CONTAINS[c] "APFS" AND (eventMessage CONTAINS[c] "corrupt" OR eventMessage CONTAINS[c] "invalid" OR eventMessage CONTAINS[c] "error")) OR
+        ((eventMessage CONTAINS[c] "NVMe" OR eventMessage CONTAINS[c] "AppleANS") AND (eventMessage CONTAINS[c] "error" OR eventMessage CONTAINS[c] "fault" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "timeout" OR eventMessage CONTAINS[c] "critical")) OR
+        (eventMessage CONTAINS[c] "APFS" AND (eventMessage CONTAINS[c] "corrupt" OR eventMessage CONTAINS[c] "invalid" OR eventMessage CONTAINS[c] "checksum" OR eventMessage CONTAINS[c] "failed" OR eventMessage CONTAINS[c] "error")) OR
         (eventMessage CONTAINS[c] "thermal" AND (eventMessage CONTAINS[c] "serious" OR eventMessage CONTAINS[c] "critical" OR eventMessage CONTAINS[c] "shutdown")) OR
         (eventMessage CONTAINS[c] "memory pressure" AND eventMessage CONTAINS[c] "critical") OR
+        (eventMessage CONTAINS[c] "memorystatus" AND eventMessage CONTAINS[c] "kill") OR
         (eventMessage CONTAINS[c] "panic") OR
         ((eventMessage CONTAINS[c] "USB" OR eventMessage CONTAINS[c] "Thunderbolt") AND (eventMessage CONTAINS[c] "disconnect" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "overcurrent"))
         """
@@ -196,26 +199,27 @@ extension MacCollectors {
             key: "post-workload-hardware-log",
             executable: "/usr/bin/log",
             arguments: ["show", "--start", formatter.string(from: windowStart), "--style", "compact", "--predicate", predicate],
-            timeout: 35
+            timeout: 30
         )
-        let lines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+        let candidateLines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { line in
             let lower = line.lowercased()
-            return !line.contains("Timestamp") && !lower.contains("pcrt diagnostics") && !lower.contains("log show")
+            return !line.contains("Timestamp") && !lower.contains("log show")
         }
-        let storage = lines.filter { containsAny($0, ["i/o error", "media error", "data integrity", "nvme", "appleans", "apfs"]) }
-        let gpu = lines.filter { containsAny($0, ["gpu restart", "channel exception", "iogpu", "agx"]) }
-        let thermal = lines.filter { containsAny($0, ["thermal", "throttl"]) }
-        let memory = lines.filter { containsAny($0, ["memory pressure", "memorystatus", "jetsam"]) }
-        let panic = lines.filter { $0.localizedCaseInsensitiveContains("panic") }
-        let peripheral = lines.filter { containsAny($0, ["usb", "thunderbolt"]) }
+        let lines = candidateLines.filter(isActionablePostWorkloadLine)
+        let storage = lines.filter(isActionableStorageEvent)
+        let gpu = lines.filter(isActionableGPUEvent)
+        let thermal = lines.filter(isActionableThermalEvent)
+        let memory = lines.filter(isActionableMemoryEvent)
+        let panic = lines.filter(isActionablePanicEvent)
+        let peripheral = lines.filter(isActionablePeripheralEvent)
 
         var reasons: [String] = []
-        if !storage.isEmpty { reasons.append("Storage or APFS events were recorded during the workload window.") }
-        if !gpu.isEmpty { reasons.append("GPU reset, hang, or fault events were recorded during the workload window.") }
-        if !thermal.isEmpty { reasons.append("Serious thermal-management events were recorded during the workload window.") }
-        if !memory.isEmpty { reasons.append("Critical memory-pressure events were recorded during the workload window.") }
+        if !storage.isEmpty { reasons.append("Storage or APFS failure evidence was recorded during the workload window.") }
+        if !gpu.isEmpty { reasons.append("GPU reset, hang, or fault evidence was recorded during the workload window.") }
+        if !thermal.isEmpty { reasons.append("Serious thermal-management evidence was recorded during the workload window.") }
+        if !memory.isEmpty { reasons.append("Critical memory-pressure termination evidence was recorded during the workload window.") }
         if !panic.isEmpty { reasons.append("Panic evidence was recorded during the workload window.") }
-        if !peripheral.isEmpty { reasons.append("USB or Thunderbolt reset/disconnect events were recorded during the workload window.") }
+        if !peripheral.isEmpty { reasons.append("USB or Thunderbolt reset/disconnect evidence was recorded during the workload window.") }
 
         let status: CheckStatus
         if !reasons.isEmpty { status = .warning }
@@ -224,37 +228,55 @@ extension MacCollectors {
         var details = [
             "Workload event-review start: \(formatter.string(from: windowStart))",
             "Workload event-review finish: \(formatter.string(from: Date()))",
-            "Storage/APFS lines: \(storage.count)",
-            "GPU lines: \(gpu.count)",
-            "Thermal lines: \(thermal.count)",
-            "Memory-pressure lines: \(memory.count)",
-            "Panic lines: \(panic.count)",
-            "USB/Thunderbolt lines: \(peripheral.count)"
+            "Candidate log lines before benign-event filtering: \(candidateLines.count)",
+            "Actionable storage/APFS lines: \(storage.count)",
+            "Actionable GPU lines: \(gpu.count)",
+            "Actionable thermal lines: \(thermal.count)",
+            "Actionable memory-pressure lines: \(memory.count)",
+            "Actionable panic lines: \(panic.count)",
+            "Actionable USB/Thunderbolt lines: \(peripheral.count)"
         ]
+        if candidateLines.count > lines.count {
+            details.append("Ignored expected success, zero-error, cache-management, and PCRT-triggered filesystem-verification messages: \(candidateLines.count - lines.count)")
+        }
         details.append(contentsOf: lines.prefix(40))
         return DiagnosticResult(
             category: "macOS",
             domain: "Workload Stability",
             name: "Post-workload hardware event review",
             status: status,
-            summary: status == .pass ? "No targeted storage, GPU, thermal, memory, panic, USB, or Thunderbolt event was found during the diagnostic workload window." : status == .warning ? "One or more hardware-related events occurred during the workload window and require review." : "The bounded post-workload event review could not be completed.",
+            summary: status == .pass ? "No actionable storage, GPU, thermal, memory, panic, USB, or Thunderbolt failure event was found during the diagnostic workload window." : status == .warning ? "One or more actionable hardware-related events occurred during the workload window and require review." : "The bounded post-workload event review could not be completed.",
             reason: reasons.isEmpty ? (status == .incomplete ? "The targeted unified-log query timed out or returned an error." : nil) : reasons.joined(separator: " "),
             recommendedAction: status == .warning ? "Review the named event lines alongside the functional test results, then repeat the affected workload after correcting software, cooling, cable, port, or storage conditions." : nil,
             details: details,
             durationSeconds: Date().timeIntervalSince(started),
             raw: [
                 "window_start": .string(formatter.string(from: windowStart)),
-                "matched_lines": .number(Double(lines.count))
+                "candidate_lines": .number(Double(candidateLines.count)),
+                "actionable_lines": .number(Double(lines.count))
             ]
         )
     }
 
     static func panicAndShutdownHistory(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
-        let predicate = "process == \"kernel\" AND (eventMessage CONTAINS[c] \"Previous shutdown cause\" OR eventMessage CONTAINS[c] \"panic\")"
-        let logs = command(context, key: "unified-panic-shutdown-log", executable: "/usr/bin/log", arguments: ["show", "--last", "7d", "--style", "compact", "--predicate", predicate], timeout: 25)
-        let last = command(context, key: "last-reboots", executable: "/usr/bin/last", arguments: ["reboot", "shutdown"], timeout: 20)
+        let panicLogs = command(
+            context,
+            key: "unified-panic-log-24h",
+            executable: "/usr/bin/log",
+            arguments: ["show", "--last", "24h", "--style", "compact", "--predicate", "process == \"kernel\" AND eventMessage CONTAINS[c] \"panic\""],
+            timeout: 10
+        )
+        let shutdownLogs = command(
+            context,
+            key: "unified-shutdown-cause-log-24h",
+            executable: "/usr/bin/log",
+            arguments: ["show", "--last", "24h", "--style", "compact", "--predicate", "eventMessage CONTAINS[c] \"Previous shutdown cause\""],
+            timeout: 10
+        )
+        let last = command(context, key: "last-reboots", executable: "/usr/bin/last", arguments: ["reboot", "shutdown"], timeout: 15)
         let reportDirectory = URL(fileURLWithPath: "/Library/Logs/DiagnosticReports", isDirectory: true)
+        let reportDirectoryReadable = FileManager.default.isReadableFile(atPath: reportDirectory.path)
         let cutoff = Date().addingTimeInterval(-30 * 24 * 3600)
         let reportFiles = ((try? FileManager.default.contentsOfDirectory(at: reportDirectory, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])) ?? []).filter { url in
             let lower = url.lastPathComponent.lowercased()
@@ -262,42 +284,126 @@ extension MacCollectors {
             let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             return date >= cutoff
         }
-        let logLines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init)
-        let shutdownLines = logLines.filter { $0.localizedCaseInsensitiveContains("Previous shutdown cause") }
-        let panicLines = logLines.filter { $0.localizedCaseInsensitiveContains("panic") }
-        var status: CheckStatus = .pass
+        let panicLines = panicLogs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter(isActionablePanicEvent)
+        let shutdownLines = shutdownLogs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+            line.localizedCaseInsensitiveContains("Previous shutdown cause") && !isBenignZeroOrSuccessLine(line)
+        }
+        var status: CheckStatus
         var reasons: [String] = []
         if !reportFiles.isEmpty || !panicLines.isEmpty {
             status = .warning
             reasons.append("Recent kernel panic or GPU diagnostic-report evidence was found.")
-        }
-        if !shutdownLines.isEmpty {
+        } else if !shutdownLines.isEmpty {
             status = .warning
-            reasons.append("Unexpected-shutdown cause evidence was found.")
+            reasons.append("Recent shutdown-cause evidence was found.")
+        } else {
+            let boundedLogCompleted = [panicLogs, shutdownLogs].contains { !$0.timedOut && $0.exitCode == 0 }
+            let baselineEvidenceAvailable = reportDirectoryReadable || last.exitCode == 0
+            if boundedLogCompleted && baselineEvidenceAvailable { status = .pass }
+            else if baselineEvidenceAvailable { status = .info }
+            else { status = .incomplete }
         }
-        if logs.timedOut || logs.exitCode == -1 { status = status == .warning ? .warning : .incomplete }
-        let files = reportFiles.prefix(20).map(\.lastPathComponent)
-        let details = ["Recent panic/kernel/GPU diagnostic files: \(reportFiles.count)", "Shutdown-cause lines: \(shutdownLines.count)", "Panic lines: \(panicLines.count)"] + files
-        return DiagnosticResult(category: "macOS", domain: "macOS Integrity", name: "Kernel panic and unexpected-shutdown history", status: status, summary: status == .pass ? "No recent kernel panic or unexpected-shutdown evidence was found in the bounded review." : status == .warning ? "Recent panic or unexpected-shutdown evidence requires review." : "The bounded panic and shutdown review could not be completed.", reason: reasons.isEmpty ? nil : reasons.joined(separator: " "), recommendedAction: status == .warning ? "Review the named DiagnosticReports and shutdown evidence, then repeat hardware tests after correcting any software or peripheral cause." : nil, details: details + ["Boot/shutdown history entries: \(last.stdout.split(whereSeparator: \.isNewline).count)"], durationSeconds: Date().timeIntervalSince(started))
+
+        var details = [
+            "Recent panic/kernel/GPU diagnostic files (30 days): \(reportFiles.count)",
+            "Panic lines from bounded 24-hour query: \(panicLines.count)",
+            "Shutdown-cause lines from bounded 24-hour query: \(shutdownLines.count)",
+            "Boot/shutdown history entries: \(last.stdout.split(whereSeparator: \.isNewline).count)",
+            "Panic query: \(commandAvailabilityDescription(panicLogs))",
+            "Shutdown-cause query: \(commandAvailabilityDescription(shutdownLogs))"
+        ]
+        details.append(contentsOf: reportFiles.prefix(20).map(\.lastPathComponent))
+        details.append(contentsOf: panicLines.prefix(10))
+        details.append(contentsOf: shutdownLines.prefix(10))
+
+        let summary: String
+        switch status {
+        case .pass:
+            summary = "No recent kernel panic or shutdown-cause evidence was found in the completed bounded review."
+        case .warning:
+            summary = "Recent panic or shutdown-cause evidence requires review."
+        case .info:
+            summary = "No panic report was found in the available evidence; one or more supplemental unified-log queries were unavailable."
+        default:
+            summary = "Panic and shutdown evidence could not be reviewed completely."
+        }
+        return DiagnosticResult(
+            category: "macOS",
+            domain: "macOS Integrity",
+            name: "Kernel panic and unexpected-shutdown history",
+            status: status,
+            summary: summary,
+            reason: reasons.isEmpty ? nil : reasons.joined(separator: " "),
+            recommendedAction: status == .warning ? "Review the named DiagnosticReports and shutdown evidence, then repeat hardware tests after correcting any software or peripheral cause." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started)
+        )
     }
 
     static func servicesHealth(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
-        let predicate = "process == \"launchd\" AND (eventMessage CONTAINS[c] \"exited with abnormal code\" OR eventMessage CONTAINS[c] \"crashed\" OR eventMessage CONTAINS[c] \"throttling respawn\")"
-        let logs = command(context, key: "launchd-failure-log", executable: "/usr/bin/log", arguments: ["show", "--last", "7d", "--style", "compact", "--predicate", predicate], timeout: 25)
+        let queries: [(key: String, predicate: String)] = [
+            ("launchd-abnormal-exit-log-24h", "process == \"launchd\" AND eventMessage CONTAINS[c] \"exited with abnormal code\""),
+            ("launchd-crash-log-24h", "process == \"launchd\" AND eventMessage CONTAINS[c] \"crashed\""),
+            ("launchd-respawn-log-24h", "process == \"launchd\" AND eventMessage CONTAINS[c] \"throttling respawn\"")
+        ]
+        var logResults: [CommandResult] = []
+        for query in queries {
+            logResults.append(command(
+                context,
+                key: query.key,
+                executable: "/usr/bin/log",
+                arguments: ["show", "--last", "24h", "--style", "compact", "--predicate", query.predicate],
+                timeout: 8
+            ))
+        }
         let launchctl = command(context, key: "launchctl-system", executable: "/bin/launchctl", arguments: ["print", "system"], timeout: 30)
-        let lines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.contains("Timestamp") }
+        let lines = logResults.flatMap { result in
+            result.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.contains("Timestamp") }
+        }
         var grouped: [String: Int] = [:]
         for line in lines {
-            let key = String(line.suffix(240))
-            grouped[key, default: 0] += 1
+            grouped[serviceFailureKey(line), default: 0] += 1
         }
-        let repeated = grouped.filter { $0.value >= 3 }.sorted { $0.value > $1.value }
+        let repeated = grouped.filter { $0.value >= 3 }.sorted { lhs, rhs in
+            lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
+        }
+        let completedLogQueries = logResults.filter { !$0.timedOut && $0.exitCode == 0 }.count
         let status: CheckStatus
         if !repeated.isEmpty { status = .warning }
-        else if logs.timedOut || (logs.exitCode != 0 && launchctl.exitCode != 0) { status = .incomplete }
-        else { status = .pass }
-        return DiagnosticResult(category: "macOS", domain: "macOS Maintenance", name: "Failed and repeatedly crashing services", status: status, summary: status == .pass ? "No repeatedly abnormal launchd service pattern was found in the bounded seven-day review." : status == .warning ? "One or more launchd service failures repeated during the review period." : "Service and launchd evidence could not be reviewed completely.", reason: status == .warning ? "\(repeated.count) repeated launchd failure pattern(s) occurred at least three times." : nil, recommendedAction: status == .warning ? "Review the named launchd jobs and their owning applications; do not treat a stopped on-demand service as a failure by itself." : nil, details: repeated.prefix(15).map { "\($0.value)x: \($0.key)" } + ["System launchd inventory size: \(launchctl.stdout.count) characters"], durationSeconds: Date().timeIntervalSince(started))
+        else if completedLogQueries > 0 { status = .pass }
+        else if launchctl.exitCode == 0 { status = .info }
+        else { status = .incomplete }
+
+        var details = repeated.prefix(15).map { "\($0.value)x: \($0.key)" }
+        details.append("Bounded launchd log queries completed: \(completedLogQueries)/\(logResults.count)")
+        for (index, result) in logResults.enumerated() {
+            details.append("\(queries[index].key): \(commandAvailabilityDescription(result))")
+        }
+        details.append("System launchd inventory size: \(launchctl.stdout.count) characters")
+
+        let summary: String
+        switch status {
+        case .pass:
+            summary = "No repeatedly abnormal launchd service pattern was found in the completed bounded 24-hour queries."
+        case .warning:
+            summary = "One or more launchd service failures repeated during the bounded review period."
+        case .info:
+            summary = "The live launchd inventory was collected, but the supplemental historical log queries were unavailable."
+        default:
+            summary = "Service and launchd evidence could not be reviewed."
+        }
+        return DiagnosticResult(
+            category: "macOS",
+            domain: "macOS Maintenance",
+            name: "Failed and repeatedly crashing services",
+            status: status,
+            summary: summary,
+            reason: status == .warning ? "\(repeated.count) repeated launchd failure pattern(s) occurred at least three times." : nil,
+            recommendedAction: status == .warning ? "Review the named launchd jobs and their owning applications; do not treat a stopped on-demand service as a failure by itself." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started)
+        )
     }
 
     static func softwareUpdates(_ context: DiagnosticContext) -> DiagnosticResult {
@@ -477,6 +583,179 @@ extension MacCollectors {
         case .critical: return "Critical"
         @unknown default: return "Unknown"
         }
+    }
+
+    private struct WiFiSnapshot {
+        let interfaceName: String?
+        let rssi: Int?
+        let noise: Int?
+        let rateMbps: Double?
+        let channel: String?
+        let phyMode: String?
+        let source: String
+
+        var snr: Int? {
+            guard let rssi, let noise else { return nil }
+            return rssi - noise
+        }
+    }
+
+    private static func currentWiFiSnapshot(_ object: Any?, preferredInterface: String?) -> WiFiSnapshot? {
+        guard let root = object as? [String: Any],
+              let groups = root["SPAirPortDataType"] as? [[String: Any]] else { return nil }
+        var candidates: [(score: Int, snapshot: WiFiSnapshot)] = []
+        for group in groups {
+            guard let interfaces = group["spairport_airport_interfaces"] as? [[String: Any]] else { continue }
+            for interface in interfaces {
+                guard let current = interface["spairport_current_network_information"] as? [String: Any] else { continue }
+                let name = interface["_name"] as? String
+                let status = (interface["spairport_status_information"] as? String) ?? ""
+                let signal = parseSignalNoiseField(current["spairport_signal_noise"])
+                let snapshot = WiFiSnapshot(
+                    interfaceName: name,
+                    rssi: signal.rssi,
+                    noise: signal.noise,
+                    rateMbps: numericDoubleValue(current["spairport_network_rate"]),
+                    channel: current["spairport_network_channel"] as? String,
+                    phyMode: current["spairport_network_phymode"] as? String,
+                    source: "system_profiler current network"
+                )
+                var score = 0
+                if let preferredInterface, name == preferredInterface { score += 100 }
+                if status.localizedCaseInsensitiveContains("connected") { score += 50 }
+                if signal.rssi != nil && signal.noise != nil { score += 20 }
+                if current["_name"] != nil { score += 10 }
+                candidates.append((score, snapshot))
+            }
+        }
+        return candidates.max { $0.score < $1.score }?.snapshot
+    }
+
+    private static func wdutilWiFiSnapshot(_ output: String) -> WiFiSnapshot? {
+        guard !output.isEmpty else { return nil }
+        let rssi = regexIntegers(output, pattern: "(?m)^\\s*RSSI\\s*:\\s*(-?[0-9]+)\\s*dBm\\s*$", count: 1)?.first
+        let noise = regexIntegers(output, pattern: "(?m)^\\s*Noise\\s*:\\s*(-?[0-9]+)\\s*dBm\\s*$", count: 1)?.first
+        let interfaceName = parseFirstString(output, pattern: "(?m)^\\s*Interface Name\\s*:\\s*([^\\n]+)")
+        let rate = parseFirstDouble(output, patterns: ["(?m)^\\s*Tx Rate\\s*:\\s*([0-9.]+)\\s*Mbps"])
+        let channel = parseFirstString(output, pattern: "(?m)^\\s*Channel\\s*:\\s*([^\\n]+)")
+        let phy = parseFirstString(output, pattern: "(?m)^\\s*PHY Mode\\s*:\\s*([^\\n]+)")
+        guard rssi != nil || noise != nil || rate != nil || channel != nil || phy != nil else { return nil }
+        return WiFiSnapshot(interfaceName: interfaceName, rssi: rssi, noise: noise, rateMbps: rate, channel: channel, phyMode: phy, source: "wdutil connected interface")
+    }
+
+    private static func mergeWiFiSnapshots(primary: WiFiSnapshot?, fallback: WiFiSnapshot?) -> WiFiSnapshot? {
+        guard primary != nil || fallback != nil else { return nil }
+        return WiFiSnapshot(
+            interfaceName: primary?.interfaceName ?? fallback?.interfaceName,
+            rssi: primary?.rssi ?? fallback?.rssi,
+            noise: primary?.noise ?? fallback?.noise,
+            rateMbps: primary?.rateMbps ?? fallback?.rateMbps,
+            channel: primary?.channel ?? fallback?.channel,
+            phyMode: primary?.phyMode ?? fallback?.phyMode,
+            source: [primary?.source, fallback?.source].compactMap { $0 }.joined(separator: " with fallback from ")
+        )
+    }
+
+    private static func parseSignalNoiseField(_ value: Any?) -> (rssi: Int?, noise: Int?) {
+        guard let value else { return (nil, nil) }
+        let text = String(describing: value)
+        if let pair = regexIntegers(text, pattern: "(-?[0-9]+)\\s*dBm\\s*/\\s*(-?[0-9]+)\\s*dBm", count: 2) {
+            return (pair[0], pair[1])
+        }
+        return (nil, nil)
+    }
+
+    private static func numericDoubleValue(_ value: Any?) -> Double? {
+        if let value = value as? Double { return value }
+        if let value = value as? Int { return Double(value) }
+        if let value = value as? NSNumber { return value.doubleValue }
+        if let value = value as? String { return Double(value) }
+        return nil
+    }
+
+    private static func isBenignZeroOrSuccessLine(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        let benign = [
+            "error = 0", "error: 0", "errno = 0", "errno: 0", "final error was 0",
+            "exit code is 0", "exit code 0", "return code 0", "status = 0", "status: 0",
+            "appears to be ok", "completed successfully", "successfully completed", "no errors found",
+            "getapfsvolumerole error", "cache_delete", "invalidating assertion", "no panic",
+            "panic count: 0", "panic count = 0"
+        ]
+        return benign.contains(where: { lower.contains($0) })
+    }
+
+    private static func isActionablePostWorkloadLine(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        if isBenignZeroOrSuccessLine(line) { return false }
+        if lower.contains("pcrtscannerhelper") && (lower.contains("fsck_apfs") || lower.contains("cache_delete")) { return false }
+        if lower.contains("fsck_apfs") && !containsAny(lower, ["corrupt", "invalid", "failed", "failure", "i/o error", "checksum"]) { return false }
+        return isActionableStorageEvent(line) || isActionableGPUEvent(line) || isActionableThermalEvent(line) || isActionableMemoryEvent(line) || isActionablePanicEvent(line) || isActionablePeripheralEvent(line)
+    }
+
+    private static func isActionableStorageEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        if isBenignZeroOrSuccessLine(line) { return false }
+        if containsAny(lower, ["i/o error", "media error", "data integrity error", "checksum error"]) { return true }
+        if containsAny(lower, ["nvme", "appleans"]) && containsAny(lower, ["error", "fault", "reset", "timeout", "critical"]) { return true }
+        if lower.contains("apfs") && containsAny(lower, ["corrupt", "invalid", "failed", "failure", "error", "checksum"]) { return true }
+        return false
+    }
+
+    private static func isActionableGPUEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return containsAny(lower, ["gpu restart", "channel exception"]) ||
+            (containsAny(lower, ["iogpu", "agx"]) && containsAny(lower, ["fault", "hang", "reset", "timeout", "failed", "error"]))
+    }
+
+    private static func isActionableThermalEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return lower.contains("thermal") && containsAny(lower, ["serious", "critical", "shutdown", "emergency"])
+    }
+
+    private static func isActionableMemoryEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return (lower.contains("memory pressure") && lower.contains("critical")) ||
+            (containsAny(lower, ["memorystatus", "jetsam"]) && containsAny(lower, ["kill", "terminated"]))
+    }
+
+    private static func isActionablePanicEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        guard lower.contains("panic"), !isBenignZeroOrSuccessLine(line) else { return false }
+        return !containsAny(lower, ["panic log collection", "searching for panic", "panic diagnostic files: 0"])
+    }
+
+    private static func isActionablePeripheralEvent(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return containsAny(lower, ["usb", "thunderbolt"]) && containsAny(lower, ["disconnect", "reset", "overcurrent", "failed", "error"])
+    }
+
+    private static func commandAvailabilityDescription(_ result: CommandResult) -> String {
+        if result.timedOut { return "Timed out after \(String(format: "%.1f", result.duration)) seconds" }
+        if result.exitCode == 0 { return "Completed in \(String(format: "%.1f", result.duration)) seconds" }
+        return "Unavailable (exit \(result.exitCode): \(SystemUtilities.firstLine(result.combinedOutput)))"
+    }
+
+    private static func serviceFailureKey(_ line: String) -> String {
+        let lower = line.lowercased()
+        let event: String
+        if lower.contains("throttling respawn") { event = "throttling respawn" }
+        else if lower.contains("exited with abnormal code") { event = "abnormal exit" }
+        else { event = "crash" }
+
+        if let regex = try? NSRegularExpression(pattern: "[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){2,}", options: []),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..<line.endIndex, in: line)),
+           let range = Range(match.range, in: line) {
+            return "\(line[range]) — \(event)"
+        }
+        var normalized = line
+        if let regex = try? NSRegularExpression(pattern: "^\\S+\\s+\\S+\\s+", options: []) {
+            normalized = regex.stringByReplacingMatches(in: normalized, range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized), withTemplate: "")
+        }
+        if let regex = try? NSRegularExpression(pattern: "\\[[0-9A-Fa-fx:]+\\]|\\bpid[ =:]+[0-9]+\\b", options: [.caseInsensitive]) {
+            normalized = regex.stringByReplacingMatches(in: normalized, range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized), withTemplate: "<id>")
+        }
+        return String(normalized.suffix(220)) + " — " + event
     }
 
     private static func selectedLines(_ output: String, containingAny needles: [String]) -> [String] {
