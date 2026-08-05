@@ -1,0 +1,481 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		6526D01D7AD48C39557EBDC0 /* PCRTDiagnosticsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2D9CED6C76734D685D2345 /* PCRTDiagnosticsMacApp.swift */; };
+		5D4A0B34D5362645AFAB66C8 /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9970E77C01F00037930B0178 /* MainViewModel.swift */; };
+		FF648C072B3407A76E26036B /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4AAAAA13F1C0F1285CD1E0 /* AppState.swift */; };
+		9C994F21E8F2D60A7821D985 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4849C28618BC6F032A71970 /* MainView.swift */; };
+		BF08CEBF308518755E82D85A /* ServerAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB80703B311BA8329169596 /* ServerAPIClient.swift */; };
+		5774AF261EACDA7D5E7914BA /* HelperSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859D7018EC9D8C621A73B9CA /* HelperSessionController.swift */; };
+		92F85762E50752C30000FE0E /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D1C475964FAD1AA5BF7E679 /* main.swift */; };
+		29DDD0ED8A7F4624628EC4E5 /* CancellationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D38303117A8136959CAEB7C2 /* CancellationController.swift */; };
+		F220F5A0B5CD7F8D0EF7B38A /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489A2D26D96C1FE3B7377952 /* CommandRunner.swift */; };
+		6ABC447215E29A6869DB7C05 /* DiagnosticContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = B99B9707A7C2B79BD86DA20E /* DiagnosticContext.swift */; };
+		AD245B1EAAC31B4FC1788D67 /* HelperArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1EBDD7342608C1C0B39110 /* HelperArguments.swift */; };
+		7E64D11E294F221E5005F820 /* HelperRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBF61CAF99AA5605A75D3D8 /* HelperRuntime.swift */; };
+		F9511F5717C103CC0A80D608 /* RunLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE6E8D67552F57571076682 /* RunLogger.swift */; };
+		9A02D8B0654693A615EA75AB /* ScanCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38DF36F627523634B855436E /* ScanCoordinator.swift */; };
+		1442A2D93BDEF35D3C8388A7 /* WorkspaceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F18D3941F507006F1C2802A /* WorkspaceValidator.swift */; };
+		6D3E1B48C5D26C091BC6C03B /* HardwareCollectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491592ADC110ED3AFBDB1201 /* HardwareCollectors.swift */; };
+		6314227972347711E4D70F84 /* InventoryCollectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F9DC52EDE1544604687FBB /* InventoryCollectors.swift */; };
+		5B8C2C40CB9FDEE4CC0F36CD /* MacCollectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377255394B6DE656A6538225 /* MacCollectors.swift */; };
+		DF5908A90CF1559A90C5488B /* SystemCollectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED506627CF6800537B9CAB5 /* SystemCollectors.swift */; };
+		44956595054E3824CE58A9E6 /* DiagnosticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F4C2B732DB84E5420209AEE /* DiagnosticTests.swift */; };
+		B8D57A1849E78F061A22A9AF /* PCRTDiagnosticsMacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACDFE71A948B87E72E0E7618 /* PCRTDiagnosticsMacTests.swift */; };
+		FB90684E69A6C96ED866993E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5B15DB5AF2A709DD87F02198 /* Assets.xcassets */; };
+		AF10D93F19EF7B2DC8EA520E /* PCRTScannerHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = 53D896F845A3B3EF119EF3F9 /* PCRTScannerHelper */; };
+		2C10405B0E0D2FC09D4DD3B1 /* PCRTCore in Frameworks */ = {isa = PBXBuildFile; productRef = B9C519C4AE9AD9B95D48651C /* PCRTCore */; };
+		E182363612BD9F481D93D55B /* PCRTCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6E851A1F7EC1551EA481D21C /* PCRTCore */; };
+		84D4B89C9A7FF2DA14755666 /* PCRTCore in Frameworks */ = {isa = PBXBuildFile; productRef = C45093BCE9F2CEDC3C834A49 /* PCRTCore */; };
+		113246AB1D636C4B9D36DED1 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A8EB7C08F8CA00D7F2C46A3 /* Metal.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		636DDC518D0643B385A2B0F3 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */; proxyType = 1; remoteGlobalIDString = 640FF9FB13AA5F5EF14E0BBC; remoteInfo = PCRTScannerHelper; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		B420361402EE5A7BC7EC5FC6 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 640FF9FB13AA5F5EF14E0BBC /* PCRTScannerHelper */; targetProxy = 636DDC518D0643B385A2B0F3 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		32045051CAFCD67E3E067EDB /* Copy Helper */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 6; files = (AF10D93F19EF7B2DC8EA520E /* PCRTScannerHelper in CopyFiles */,); name = "Copy Privileged Helper"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		5718BA8B2965F0F686C8E55B /* PCRT Diagnostics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PCRT Diagnostics.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		53D896F845A3B3EF119EF3F9 /* PCRTScannerHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PCRTScannerHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		87D1F151250A9FF7B6372D46 /* PCRTDiagnosticsMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PCRTDiagnosticsMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8A8EB7C08F8CA00D7F2C46A3 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		AD2D9CED6C76734D685D2345 /* PCRTDiagnosticsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCRTDiagnosticsMacApp.swift; sourceTree = "<group>"; };
+		9970E77C01F00037930B0178 /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
+		CC4AAAAA13F1C0F1285CD1E0 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		B4849C28618BC6F032A71970 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		0BB80703B311BA8329169596 /* ServerAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAPIClient.swift; sourceTree = "<group>"; };
+		859D7018EC9D8C621A73B9CA /* HelperSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSessionController.swift; sourceTree = "<group>"; };
+		5D1C475964FAD1AA5BF7E679 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D38303117A8136959CAEB7C2 /* CancellationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellationController.swift; sourceTree = "<group>"; };
+		489A2D26D96C1FE3B7377952 /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
+		B99B9707A7C2B79BD86DA20E /* DiagnosticContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticContext.swift; sourceTree = "<group>"; };
+		BC1EBDD7342608C1C0B39110 /* HelperArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperArguments.swift; sourceTree = "<group>"; };
+		0CBF61CAF99AA5605A75D3D8 /* HelperRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRuntime.swift; sourceTree = "<group>"; };
+		5BE6E8D67552F57571076682 /* RunLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunLogger.swift; sourceTree = "<group>"; };
+		38DF36F627523634B855436E /* ScanCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanCoordinator.swift; sourceTree = "<group>"; };
+		1F18D3941F507006F1C2802A /* WorkspaceValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceValidator.swift; sourceTree = "<group>"; };
+		491592ADC110ED3AFBDB1201 /* HardwareCollectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardwareCollectors.swift; sourceTree = "<group>"; };
+		39F9DC52EDE1544604687FBB /* InventoryCollectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryCollectors.swift; sourceTree = "<group>"; };
+		377255394B6DE656A6538225 /* MacCollectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCollectors.swift; sourceTree = "<group>"; };
+		5ED506627CF6800537B9CAB5 /* SystemCollectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemCollectors.swift; sourceTree = "<group>"; };
+		1F4C2B732DB84E5420209AEE /* DiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticTests.swift; sourceTree = "<group>"; };
+		ACDFE71A948B87E72E0E7618 /* PCRTDiagnosticsMacTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCRTDiagnosticsMacTests.swift; sourceTree = "<group>"; };
+		5B15DB5AF2A709DD87F02198 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F2C5B33075AEB8DD4A529EF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B29400D0E6CB885974633BA6 /* PCRTDiagnostics.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PCRTDiagnostics.entitlements; sourceTree = "<group>"; };
+		B66BCDC810D3FCEA23D284EF /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		C82E558DA2658454C8E28141 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		D10F92CD4FDC740168A3E491 /* RELEASE_NOTES_0.1.0.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = RELEASE_NOTES_0.1.0.md; sourceTree = "<group>"; };
+		B981B35045BACC2735A597B2 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		CB498D04C5529EA39EF122F8 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
+		ECB4ED00EF137235D231ABCB /* BUILD_GITHUB.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = BUILD_GITHUB.md; sourceTree = "<group>"; };
+		9E7A4E9672200B7F978B59BC /* BUILD_LOCAL.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = BUILD_LOCAL.md; sourceTree = "<group>"; };
+		FE976F8B952D57DFB94585F5 /* DIAGNOSTIC_CHECK_MATRIX.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DIAGNOSTIC_CHECK_MATRIX.md; sourceTree = "<group>"; };
+		D110D1BB66B895B2CE028940 /* PRIVILEGE_AND_IPC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PRIVILEGE_AND_IPC.md; sourceTree = "<group>"; };
+		0FF5E8E49010FF6465AECC42 /* SERVER_COMPATIBILITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SERVER_COMPATIBILITY.md; sourceTree = "<group>"; };
+		EA69C8CD3B8822083FE48A89 /* SIGNING_AND_NOTARIZATION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SIGNING_AND_NOTARIZATION.md; sourceTree = "<group>"; };
+		EB748D741E898C63D5182580 /* SOURCE_REVIEW.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SOURCE_REVIEW.md; sourceTree = "<group>"; };
+		447DDAE0B8D9F920E00B547C /* UNSIGNED_BETA.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = UNSIGNED_BETA.md; sourceTree = "<group>"; };
+		2AD8A748FB602D731D343458 /* Signing.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text; path = Signing.example.xcconfig; sourceTree = "<group>"; };
+		DAFB4DED8D1E4D1C1089628E /* build-release.sh */ = {isa = PBXFileReference; lastKnownFileType = text; path = build-release.sh; sourceTree = "<group>"; };
+		1B368E413BF76937975BB996 /* check-source.sh */ = {isa = PBXFileReference; lastKnownFileType = text; path = check-source.sh; sourceTree = "<group>"; };
+		40A6E475F1D3B3700AA6485D /* sign-and-notarize.sh */ = {isa = PBXFileReference; lastKnownFileType = text; path = sign-and-notarize.sh; sourceTree = "<group>"; };
+		7E76343273D03A274F5E3F87 /* validate-pbx.py */ = {isa = PBXFileReference; lastKnownFileType = text; path = validate-pbx.py; sourceTree = "<group>"; };
+		E841284A637E713F0CB084DF /* verify-app.sh */ = {isa = PBXFileReference; lastKnownFileType = text; path = verify-app.sh; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8226845DD06A9803C9F1E0E1 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
+			2C10405B0E0D2FC09D4DD3B1 /* PCRTCore in Frameworks */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		55C39D97A1A4071C002367F0 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
+			E182363612BD9F481D93D55B /* PCRTCore in Frameworks */,
+			113246AB1D636C4B9D36DED1 /* Metal.framework in Frameworks */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		91785813F8F5AF2EA7FBB9F2 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
+			84D4B89C9A7FF2DA14755666 /* PCRTCore in Frameworks */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		773CFCFD55136ED801D38D38 /* App */ = {isa = PBXGroup; children = (
+			AD2D9CED6C76734D685D2345 /* PCRTDiagnosticsMacApp.swift */,
+			9970E77C01F00037930B0178 /* MainViewModel.swift */,
+			CC4AAAAA13F1C0F1285CD1E0 /* AppState.swift */,
+		); name = App; path = App; sourceTree = "<group>"; };
+		53B517CC3E26CF06C54EBCF5 /* Views */ = {isa = PBXGroup; children = (
+			B4849C28618BC6F032A71970 /* MainView.swift */,
+		); name = Views; path = Views; sourceTree = "<group>"; };
+		9FA526AE77A7EB92AA611CA1 /* Services */ = {isa = PBXGroup; children = (
+			0BB80703B311BA8329169596 /* ServerAPIClient.swift */,
+			859D7018EC9D8C621A73B9CA /* HelperSessionController.swift */,
+		); name = Services; path = Services; sourceTree = "<group>"; };
+		D31C6448FDA434E724E93E67 /* Resources */ = {isa = PBXGroup; children = (
+			5B15DB5AF2A709DD87F02198 /* Assets.xcassets */,
+			F2C5B33075AEB8DD4A529EF8 /* Info.plist */,
+			B29400D0E6CB885974633BA6 /* PCRTDiagnostics.entitlements */,
+		); name = Resources; path = Resources; sourceTree = "<group>"; };
+		1DF401F405384E02A0BF02D3 /* PCRTDiagnosticsMac */ = {isa = PBXGroup; children = (
+			773CFCFD55136ED801D38D38 /* App */,
+			53B517CC3E26CF06C54EBCF5 /* Views */,
+			9FA526AE77A7EB92AA611CA1 /* Services */,
+			D31C6448FDA434E724E93E67 /* Resources */,
+		); name = PCRTDiagnosticsMac; path = PCRTDiagnosticsMac; sourceTree = "<group>"; };
+		DBAF7283D256E2A0A0F9D57A /* Runtime */ = {isa = PBXGroup; children = (
+			D38303117A8136959CAEB7C2 /* CancellationController.swift */,
+			489A2D26D96C1FE3B7377952 /* CommandRunner.swift */,
+			B99B9707A7C2B79BD86DA20E /* DiagnosticContext.swift */,
+			BC1EBDD7342608C1C0B39110 /* HelperArguments.swift */,
+			0CBF61CAF99AA5605A75D3D8 /* HelperRuntime.swift */,
+			5BE6E8D67552F57571076682 /* RunLogger.swift */,
+			38DF36F627523634B855436E /* ScanCoordinator.swift */,
+			1F18D3941F507006F1C2802A /* WorkspaceValidator.swift */,
+		); name = Runtime; path = Runtime; sourceTree = "<group>"; };
+		280CFDFC880DB5F39FCF5049 /* Collectors */ = {isa = PBXGroup; children = (
+			491592ADC110ED3AFBDB1201 /* HardwareCollectors.swift */,
+			39F9DC52EDE1544604687FBB /* InventoryCollectors.swift */,
+			377255394B6DE656A6538225 /* MacCollectors.swift */,
+			5ED506627CF6800537B9CAB5 /* SystemCollectors.swift */,
+		); name = Collectors; path = Collectors; sourceTree = "<group>"; };
+		4CAD4D2CD6F928685AA7DE01 /* Diagnostics */ = {isa = PBXGroup; children = (
+			1F4C2B732DB84E5420209AEE /* DiagnosticTests.swift */,
+		); name = Diagnostics; path = Diagnostics; sourceTree = "<group>"; };
+		4256D2E16829EA70D7E955DA /* PCRTScannerHelper */ = {isa = PBXGroup; children = (
+			5D1C475964FAD1AA5BF7E679 /* main.swift */,
+			DBAF7283D256E2A0A0F9D57A /* Runtime */,
+			280CFDFC880DB5F39FCF5049 /* Collectors */,
+			4CAD4D2CD6F928685AA7DE01 /* Diagnostics */,
+		); name = PCRTScannerHelper; path = PCRTScannerHelper; sourceTree = "<group>"; };
+		12E9DF2F0820E9F612A165AB /* PCRTDiagnosticsMacTests */ = {isa = PBXGroup; children = (
+			ACDFE71A948B87E72E0E7618 /* PCRTDiagnosticsMacTests.swift */,
+		); name = PCRTDiagnosticsMacTests; path = PCRTDiagnosticsMacTests; sourceTree = "<group>"; };
+		419C32BEAEED8DFF4FA85F50 /* Packages */ = {isa = PBXGroup; children = (
+		); name = Packages; path = Packages; sourceTree = "<group>"; };
+		A3435C187EC2B6766CE5BA91 /* docs */ = {isa = PBXGroup; children = (
+			CB498D04C5529EA39EF122F8 /* ARCHITECTURE.md */,
+			ECB4ED00EF137235D231ABCB /* BUILD_GITHUB.md */,
+			9E7A4E9672200B7F978B59BC /* BUILD_LOCAL.md */,
+			FE976F8B952D57DFB94585F5 /* DIAGNOSTIC_CHECK_MATRIX.md */,
+			D110D1BB66B895B2CE028940 /* PRIVILEGE_AND_IPC.md */,
+			0FF5E8E49010FF6465AECC42 /* SERVER_COMPATIBILITY.md */,
+			EA69C8CD3B8822083FE48A89 /* SIGNING_AND_NOTARIZATION.md */,
+			EB748D741E898C63D5182580 /* SOURCE_REVIEW.md */,
+			447DDAE0B8D9F920E00B547C /* UNSIGNED_BETA.md */,
+		); name = docs; path = docs; sourceTree = "<group>"; };
+		FB63863DFA23F831C1A70A35 /* Configuration */ = {isa = PBXGroup; children = (
+			2AD8A748FB602D731D343458 /* Signing.example.xcconfig */,
+		); name = Configuration; path = Configuration; sourceTree = "<group>"; };
+		5C46FFD272C9B9F1039A2C08 /* Scripts */ = {isa = PBXGroup; children = (
+			DAFB4DED8D1E4D1C1089628E /* build-release.sh */,
+			1B368E413BF76937975BB996 /* check-source.sh */,
+			40A6E475F1D3B3700AA6485D /* sign-and-notarize.sh */,
+			7E76343273D03A274F5E3F87 /* validate-pbx.py */,
+			E841284A637E713F0CB084DF /* verify-app.sh */,
+		); name = Scripts; path = Scripts; sourceTree = "<group>"; };
+		7561BFB015D8F536760CB671 /* Frameworks */ = {isa = PBXGroup; children = (
+			8A8EB7C08F8CA00D7F2C46A3 /* Metal.framework */,
+		); name = Frameworks; sourceTree = "<group>"; };
+		FBDC4F23F93125BBEEAE800C /* Products */ = {isa = PBXGroup; children = (
+			5718BA8B2965F0F686C8E55B /* PCRT Diagnostics.app */,
+			53D896F845A3B3EF119EF3F9 /* PCRTScannerHelper */,
+			87D1F151250A9FF7B6372D46 /* PCRTDiagnosticsMacTests.xctest */,
+		); name = Products; sourceTree = "<group>"; };
+		6CFC827E67DCAE34C72B9CED /* Main Group */ = {isa = PBXGroup; children = (
+			1DF401F405384E02A0BF02D3 /* PCRTDiagnosticsMac */,
+			4256D2E16829EA70D7E955DA /* PCRTScannerHelper */,
+			12E9DF2F0820E9F612A165AB /* PCRTDiagnosticsMacTests */,
+			419C32BEAEED8DFF4FA85F50 /* Packages */,
+			A3435C187EC2B6766CE5BA91 /* docs */,
+			FB63863DFA23F831C1A70A35 /* Configuration */,
+			5C46FFD272C9B9F1039A2C08 /* Scripts */,
+			B66BCDC810D3FCEA23D284EF /* README.md */,
+			C82E558DA2658454C8E28141 /* LICENSE */,
+			D10F92CD4FDC740168A3E491 /* RELEASE_NOTES_0.1.0.md */,
+			B981B35045BACC2735A597B2 /* .gitignore */,
+			7561BFB015D8F536760CB671 /* Frameworks */,
+			FBDC4F23F93125BBEEAE800C /* Products */,
+		); name = "Main Group"; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CCD1BDFE40AA20836710EC01 /* PCRTDiagnosticsMac */ = {isa = PBXNativeTarget; buildConfigurationList = 6D8FB42965893BD12EA629B4 /* Build configuration list for PBXNativeTarget "PCRTDiagnosticsMac" */; buildPhases = (
+			DE54E274973760DB10C0103F /* Sources */,
+			8226845DD06A9803C9F1E0E1 /* Frameworks */,
+			05E689F15507506FE0040640 /* Resources */,
+			32045051CAFCD67E3E067EDB /* Copy Helper */,
+		); buildRules = (); dependencies = (
+			B420361402EE5A7BC7EC5FC6 /* PCRTScannerHelper */,
+		); name = PCRTDiagnosticsMac; packageProductDependencies = (
+			B9C519C4AE9AD9B95D48651C /* PCRTCore */,
+		); productName = "PCRT Diagnostics"; productReference = 5718BA8B2965F0F686C8E55B /* PCRT Diagnostics */; productType = com.apple.product-type.application; };
+		640FF9FB13AA5F5EF14E0BBC /* PCRTScannerHelper */ = {isa = PBXNativeTarget; buildConfigurationList = CB59713FF79905A080079DD6 /* Build configuration list for PBXNativeTarget "PCRTScannerHelper" */; buildPhases = (
+			2ADA67D1BF72019E3E8D0502 /* Sources */,
+			55C39D97A1A4071C002367F0 /* Frameworks */,
+			D1CF06A36408981EB40E48D1 /* Resources */,
+		); buildRules = (); dependencies = (
+		); name = PCRTScannerHelper; packageProductDependencies = (
+			6E851A1F7EC1551EA481D21C /* PCRTCore */,
+		); productName = PCRTScannerHelper; productReference = 53D896F845A3B3EF119EF3F9 /* PCRTScannerHelper */; productType = com.apple.product-type.tool; };
+		261EC7E8302EBAF96062E8C8 /* PCRTDiagnosticsMacTests */ = {isa = PBXNativeTarget; buildConfigurationList = E7E32071A15F94CE991904B6 /* Build configuration list for PBXNativeTarget "PCRTDiagnosticsMacTests" */; buildPhases = (
+			4BC83E4CFC8C33EEDB9A3EA0 /* Sources */,
+			91785813F8F5AF2EA7FBB9F2 /* Frameworks */,
+			E15125A0591885301B7DD42C /* Resources */,
+		); buildRules = (); dependencies = (
+		); name = PCRTDiagnosticsMacTests; packageProductDependencies = (
+			C45093BCE9F2CEDC3C834A49 /* PCRTCore */,
+		); productName = PCRTDiagnosticsMacTests; productReference = 87D1F151250A9FF7B6372D46 /* PCRTDiagnosticsMacTests */; productType = com.apple.product-type.bundle.unit-test; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {CCD1BDFE40AA20836710EC01 = {CreatedOnToolsVersion = 16.0; }; 640FF9FB13AA5F5EF14E0BBC = {CreatedOnToolsVersion = 16.0; }; 261EC7E8302EBAF96062E8C8 = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = 2085AFA2AE905A69F4756592 /* Build configuration list for PBXProject "PCRTDiagnosticsMac" */; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 6CFC827E67DCAE34C72B9CED; packageReferences = (87BF6F3BFD5A6C22E1E56CDB /* XCLocalSwiftPackageReference "Packages/PCRTCore" */,); productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */; projectDirPath = ""; projectRoot = ""; targets = (CCD1BDFE40AA20836710EC01 /* PCRTDiagnosticsMac */, 640FF9FB13AA5F5EF14E0BBC /* PCRTScannerHelper */, 261EC7E8302EBAF96062E8C8 /* PCRTDiagnosticsMacTests */,); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		05E689F15507506FE0040640 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+			FB90684E69A6C96ED866993E /* Assets.xcassets in Resources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		D1CF06A36408981EB40E48D1 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+		); runOnlyForDeploymentPostprocessing = 0; };
+		E15125A0591885301B7DD42C /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DE54E274973760DB10C0103F /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			6526D01D7AD48C39557EBDC0 /* PCRTDiagnosticsMacApp.swift in Sources */,
+			5D4A0B34D5362645AFAB66C8 /* MainViewModel.swift in Sources */,
+			FF648C072B3407A76E26036B /* AppState.swift in Sources */,
+			9C994F21E8F2D60A7821D985 /* MainView.swift in Sources */,
+			BF08CEBF308518755E82D85A /* ServerAPIClient.swift in Sources */,
+			5774AF261EACDA7D5E7914BA /* HelperSessionController.swift in Sources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		2ADA67D1BF72019E3E8D0502 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			92F85762E50752C30000FE0E /* main.swift in Sources */,
+			29DDD0ED8A7F4624628EC4E5 /* CancellationController.swift in Sources */,
+			F220F5A0B5CD7F8D0EF7B38A /* CommandRunner.swift in Sources */,
+			6ABC447215E29A6869DB7C05 /* DiagnosticContext.swift in Sources */,
+			AD245B1EAAC31B4FC1788D67 /* HelperArguments.swift in Sources */,
+			7E64D11E294F221E5005F820 /* HelperRuntime.swift in Sources */,
+			F9511F5717C103CC0A80D608 /* RunLogger.swift in Sources */,
+			9A02D8B0654693A615EA75AB /* ScanCoordinator.swift in Sources */,
+			1442A2D93BDEF35D3C8388A7 /* WorkspaceValidator.swift in Sources */,
+			6D3E1B48C5D26C091BC6C03B /* HardwareCollectors.swift in Sources */,
+			6314227972347711E4D70F84 /* InventoryCollectors.swift in Sources */,
+			5B8C2C40CB9FDEE4CC0F36CD /* MacCollectors.swift in Sources */,
+			DF5908A90CF1559A90C5488B /* SystemCollectors.swift in Sources */,
+			44956595054E3824CE58A9E6 /* DiagnosticTests.swift in Sources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+		4BC83E4CFC8C33EEDB9A3EA0 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			B8D57A1849E78F061A22A9AF /* PCRTDiagnosticsMacTests.swift in Sources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		58B22D68371AC8F11EADCD99 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+			CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			CLANG_ENABLE_OBJC_WEAK = YES;
+			CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+			CLANG_WARN_BOOL_CONVERSION = YES;
+			CLANG_WARN_COMMA = YES;
+			CLANG_WARN_CONSTANT_CONVERSION = YES;
+			CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+			CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+			CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+			CLANG_WARN_EMPTY_BODY = YES;
+			CLANG_WARN_ENUM_CONVERSION = YES;
+			CLANG_WARN_INFINITE_RECURSION = YES;
+			CLANG_WARN_INT_CONVERSION = YES;
+			CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+			CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+			CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+			CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+			CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+			CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+			CLANG_WARN_STRICT_PROTOTYPES = YES;
+			CLANG_WARN_SUSPICIOUS_MOVE = YES;
+			CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+			CLANG_WARN_UNREACHABLE_CODE = YES;
+			COPY_PHASE_STRIP = NO;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			GCC_C_LANGUAGE_STANDARD = gnu17;
+			GCC_NO_COMMON_BLOCKS = YES;
+			MACOSX_DEPLOYMENT_TARGET = 11.0;
+			SDKROOT = macosx;
+			SWIFT_VERSION = 5.0;
+			DEBUG_INFORMATION_FORMAT = dwarf;
+			ENABLE_TESTABILITY = YES;
+			GCC_OPTIMIZATION_LEVEL = 0;
+			GCC_PREPROCESSOR_DEFINITIONS = (
+				"DEBUG=1",
+				$(inherited),
+			);
+			MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+			ONLY_ACTIVE_ARCH = YES;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			SWIFT_OPTIMIZATION_LEVEL = -Onone;
+		}; name = Debug; };
+		D005BFB4C42D9F64610280D7 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+			CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			CLANG_ENABLE_OBJC_WEAK = YES;
+			CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+			CLANG_WARN_BOOL_CONVERSION = YES;
+			CLANG_WARN_COMMA = YES;
+			CLANG_WARN_CONSTANT_CONVERSION = YES;
+			CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+			CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+			CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+			CLANG_WARN_EMPTY_BODY = YES;
+			CLANG_WARN_ENUM_CONVERSION = YES;
+			CLANG_WARN_INFINITE_RECURSION = YES;
+			CLANG_WARN_INT_CONVERSION = YES;
+			CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+			CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+			CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+			CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+			CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+			CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+			CLANG_WARN_STRICT_PROTOTYPES = YES;
+			CLANG_WARN_SUSPICIOUS_MOVE = YES;
+			CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+			CLANG_WARN_UNREACHABLE_CODE = YES;
+			COPY_PHASE_STRIP = NO;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			GCC_C_LANGUAGE_STANDARD = gnu17;
+			GCC_NO_COMMON_BLOCKS = YES;
+			MACOSX_DEPLOYMENT_TARGET = 11.0;
+			SDKROOT = macosx;
+			SWIFT_VERSION = 5.0;
+			DEBUG_INFORMATION_FORMAT = dwarf-with-dsym;
+			ENABLE_NS_ASSERTIONS = NO;
+			MTL_ENABLE_DEBUG_INFO = NO;
+			ONLY_ACTIVE_ARCH = NO;
+			SWIFT_COMPILATION_MODE = wholemodule;
+			SWIFT_OPTIMIZATION_LEVEL = -O;
+			VALIDATE_PRODUCT = YES;
+		}; name = Release; };
+		9303EFBCAFCD82C17933C9EB /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			CODE_SIGN_ENTITLEMENTS = PCRTDiagnosticsMac/Resources/PCRTDiagnostics.entitlements;
+			CODE_SIGN_STYLE = Automatic;
+			COMBINE_HIDPI_IMAGES = YES;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = NO;
+			ENABLE_HARDENED_RUNTIME = NO;
+			GENERATE_INFOPLIST_FILE = NO;
+			INFOPLIST_FILE = PCRTDiagnosticsMac/Resources/Info.plist;
+			LD_RUNPATH_SEARCH_PATHS = (
+				$(inherited),
+				@executable_path/../Frameworks,
+			);
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTDiagnosticsMac;
+			PRODUCT_MODULE_NAME = PCRTDiagnosticsMac;
+			PRODUCT_NAME = "PCRT Diagnostics";
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Debug; };
+		0F8B4C7FB77C768D3A78A504 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			CODE_SIGN_ENTITLEMENTS = PCRTDiagnosticsMac/Resources/PCRTDiagnostics.entitlements;
+			CODE_SIGN_STYLE = Automatic;
+			COMBINE_HIDPI_IMAGES = YES;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = NO;
+			ENABLE_HARDENED_RUNTIME = NO;
+			GENERATE_INFOPLIST_FILE = NO;
+			INFOPLIST_FILE = PCRTDiagnosticsMac/Resources/Info.plist;
+			LD_RUNPATH_SEARCH_PATHS = (
+				$(inherited),
+				@executable_path/../Frameworks,
+			);
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTDiagnosticsMac;
+			PRODUCT_MODULE_NAME = PCRTDiagnosticsMac;
+			PRODUCT_NAME = "PCRT Diagnostics";
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Release; };
+		D2A35FB2A9D8167BB63DA2F5 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_HARDENED_RUNTIME = NO;
+			GENERATE_INFOPLIST_FILE = YES;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTScannerHelper;
+			PRODUCT_NAME = PCRTScannerHelper;
+			SKIP_INSTALL = YES;
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Debug; };
+		54B131EEA33F9D8A52449769 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_HARDENED_RUNTIME = NO;
+			GENERATE_INFOPLIST_FILE = YES;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTScannerHelper;
+			PRODUCT_NAME = PCRTScannerHelper;
+			SKIP_INSTALL = YES;
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Release; };
+		1DAA2CFFBF6E2812445B9A1F /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			GENERATE_INFOPLIST_FILE = YES;
+			MACOSX_DEPLOYMENT_TARGET = 11.0;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTDiagnosticsMacTests;
+			PRODUCT_NAME = $(TARGET_NAME);
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Debug; };
+		30C48ACA9D3ED5BF1ECACF5C /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			GENERATE_INFOPLIST_FILE = YES;
+			MACOSX_DEPLOYMENT_TARGET = 11.0;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.pcrepairtools.PCRTDiagnosticsMacTests;
+			PRODUCT_NAME = $(TARGET_NAME);
+			SWIFT_EMIT_LOC_STRINGS = NO;
+		}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2085AFA2AE905A69F4756592 /* Build configuration list for PBXProject "PCRTDiagnosticsMac" */ = {isa = XCConfigurationList; buildConfigurations = (58B22D68371AC8F11EADCD99 /* Debug */, D005BFB4C42D9F64610280D7 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		6D8FB42965893BD12EA629B4 /* Build configuration list for PBXNativeTarget "PCRTDiagnosticsMac" */ = {isa = XCConfigurationList; buildConfigurations = (9303EFBCAFCD82C17933C9EB /* Debug */, 0F8B4C7FB77C768D3A78A504 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		CB59713FF79905A080079DD6 /* Build configuration list for PBXNativeTarget "PCRTScannerHelper" */ = {isa = XCConfigurationList; buildConfigurations = (D2A35FB2A9D8167BB63DA2F5 /* Debug */, 54B131EEA33F9D8A52449769 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		E7E32071A15F94CE991904B6 /* Build configuration list for PBXNativeTarget "PCRTDiagnosticsMacTests" */ = {isa = XCConfigurationList; buildConfigurations = (1DAA2CFFBF6E2812445B9A1F /* Debug */, 30C48ACA9D3ED5BF1ECACF5C /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		87BF6F3BFD5A6C22E1E56CDB /* XCLocalSwiftPackageReference "Packages/PCRTCore" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/PCRTCore; };
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B9C519C4AE9AD9B95D48651C /* PCRTCore */ = {isa = XCSwiftPackageProductDependency; package = 87BF6F3BFD5A6C22E1E56CDB /* XCLocalSwiftPackageReference "Packages/PCRTCore" */; productName = PCRTCore; };
+		6E851A1F7EC1551EA481D21C /* PCRTCore */ = {isa = XCSwiftPackageProductDependency; package = 87BF6F3BFD5A6C22E1E56CDB /* XCLocalSwiftPackageReference "Packages/PCRTCore" */; productName = PCRTCore; };
+		C45093BCE9F2CEDC3C834A49 /* PCRTCore */ = {isa = XCSwiftPackageProductDependency; package = 87BF6F3BFD5A6C22E1E56CDB /* XCLocalSwiftPackageReference "Packages/PCRTCore" */; productName = PCRTCore; };
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}
