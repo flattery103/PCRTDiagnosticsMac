@@ -10,6 +10,7 @@ final class HelperSessionController {
     let runID = UUID().uuidString
     let nonce = UUID().uuidString.replacingOccurrences(of: "-", with: "") + UUID().uuidString.replacingOccurrences(of: "-", with: "")
     let workspaceURL: URL
+    let helperStartupLogURL: URL
 
     private let socketDirectory: URL
     private let socketPath: String
@@ -31,6 +32,15 @@ final class HelperSessionController {
         let host = ProcessInfo.processInfo.hostName.replacingOccurrences(of: "/", with: "-")
         workspaceURL = reportsRoot.appendingPathComponent("\(host)_\(formatter.string(from: Date()))", isDirectory: true)
         try FileManager.default.createDirectory(at: workspaceURL, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+
+        helperStartupLogURL = workspaceURL.appendingPathComponent("helper-startup.log")
+        guard FileManager.default.createFile(
+            atPath: helperStartupLogURL.path,
+            contents: Data(),
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw ServerAPIError(statusCode: nil, message: "The helper startup log could not be created.")
+        }
 
         let shortID = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12)).lowercased()
         socketDirectory = URL(fileURLWithPath: "/private/tmp/pcrt-\(shortID)", isDirectory: true)
@@ -93,7 +103,20 @@ final class HelperSessionController {
         }
         let timeout = DispatchWorkItem { [weak self] in
             guard let self = self, self.connection == nil else { return }
-            onFailure(ServerAPIError(statusCode: nil, message: "The privileged helper did not connect after administrator authorization."))
+            let startupOutput = (try? String(contentsOf: self.helperStartupLogURL, encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            let detail: String
+            if startupOutput.isEmpty {
+                detail = "No helper output was captured. Startup log: \(self.helperStartupLogURL.path)"
+            } else {
+                detail = "Helper startup output: \(startupOutput)"
+            }
+
+            onFailure(ServerAPIError(
+                statusCode: nil,
+                message: "The privileged helper did not connect after administrator authorization. \(detail)"
+            ))
             self.stop()
         }
         connectionTimeout = timeout
@@ -153,7 +176,7 @@ final class HelperSessionController {
             "--workspace", workspaceURL.path
         ]
         let helperCommand = arguments.map(shellQuote).joined(separator: " ")
-        let detachedCommand = "/usr/bin/nohup \(helperCommand) </dev/null >/dev/null 2>&1 &"
+        let detachedCommand = "/usr/bin/nohup \(helperCommand) </dev/null >>\(shellQuote(helperStartupLogURL.path)) 2>&1 &"
         let source = "do shell script \(appleScriptLiteral(detachedCommand)) with administrator privileges"
         DispatchQueue.main.async {
             var errorInfo: NSDictionary?
