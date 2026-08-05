@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Small dependency-free syntax/reference validator for an ASCII Xcode project file."""
 from __future__ import annotations
+import plistlib
 import re
 import sys
 from pathlib import Path
@@ -85,7 +86,12 @@ class Parser:
 
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else "PCRTDiagnosticsMac.xcodeproj/project.pbxproj")
-    root = Parser(tokenize(path.read_text(encoding="utf-8"))).value()
+    data = path.read_bytes()
+    stripped = data.lstrip()
+    if stripped.startswith(b"<?xml") or data.startswith(b"bplist"):
+        root = plistlib.loads(data)
+    else:
+        root = Parser(tokenize(data.decode("utf-8"))).value()
     if not isinstance(root, dict):
         raise ParseError("Project root is not a dictionary")
     objects = root.get("objects")
@@ -119,6 +125,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ParseError) as error:
+    except (OSError, ValueError, plistlib.InvalidFileException, ParseError) as error:
         print(f"PBX validation failed: {error}", file=sys.stderr)
         raise SystemExit(1)
