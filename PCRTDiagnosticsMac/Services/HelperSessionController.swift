@@ -56,6 +56,7 @@ final class HelperSessionController {
             guard let self = self else { return }
             switch result {
             case .failure(let error):
+                guard !self.isStopped else { return }
                 DispatchQueue.main.async { onFailure(error) }
             case .success(let connection):
                 do {
@@ -120,7 +121,7 @@ final class HelperSessionController {
             self.stop()
         }
         connectionTimeout = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 35, execute: timeout)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 90, execute: timeout)
     }
 
     func sendBegin(configuration: HelperScanConfiguration) throws {
@@ -163,10 +164,15 @@ final class HelperSessionController {
     }
 
     private func launchPrivilegedHelper(completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let helperPath = Bundle.main.path(forAuxiliaryExecutable: "PCRTScannerHelper"), FileManager.default.isExecutableFile(atPath: helperPath) else {
-            completion(.failure(ServerAPIError(statusCode: nil, message: "The bundled PCRTScannerHelper executable is missing.")))
+        guard let helperPath = Bundle.main.path(forAuxiliaryExecutable: "PCRTScannerHelper"),
+              FileManager.default.isExecutableFile(atPath: helperPath) else {
+            completion(.failure(ServerAPIError(
+                statusCode: nil,
+                message: "The bundled PCRTScannerHelper executable is missing."
+            )))
             return
         }
+
         let arguments = [
             helperPath,
             "--socket", socketPath,
@@ -175,18 +181,51 @@ final class HelperSessionController {
             "--uid", String(getuid()),
             "--workspace", workspaceURL.path
         ]
+
         let helperCommand = arguments.map(shellQuote).joined(separator: " ")
-        let detachedCommand = "/usr/bin/nohup \(helperCommand) </dev/null >>\(shellQuote(helperStartupLogURL.path)) 2>&1 &"
-        let source = "do shell script \(appleScriptLiteral(detachedCommand)) with administrator privileges"
-        DispatchQueue.main.async {
+
+        // Run the helper directly as the elevated AppleScript command.
+        // Do not use nohup or "&"; AppleScript owns the temporary root process.
+        let privilegedCommand =
+            "\(helperCommand) </dev/null >>\(shellQuote(helperStartupLogURL.path)) 2>&1"
+
+        let source =
+            "do shell script \(appleScriptLiteral(privilegedCommand)) with administrator privileges"
+
+        // AppleScript remains active while the helper runs, so execute it away
+        // from the main queue to keep the SwiftUI interface responsive.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
             var errorInfo: NSDictionary?
             let result = NSAppleScript(source: source)?.executeAndReturnError(&errorInfo)
-            if result == nil, let errorInfo = errorInfo {
-                let number = errorInfo["NSAppleScriptErrorNumber"] as? Int
-                let message = (errorInfo["NSAppleScriptErrorMessage"] as? String) ?? "Administrator authorization was cancelled or failed."
-                completion(.failure(ServerAPIError(statusCode: number, message: message)))
-            } else {
-                completion(.success(()))
+
+            // Once the helper connected, socket IPC handles runtime failures.
+            // Do not report the AppleScript exit again when the helper finishes.
+            let connected = self.connection != nil || self.validatedHello
+
+            let startupOutput =
+                (try? String(contentsOf: self.helperStartupLogURL, encoding: .utf8))?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            DispatchQueue.main.async {
+                if result == nil, !connected {
+                    let number = errorInfo?["NSAppleScriptErrorNumber"] as? Int
+                    let baseMessage =
+                        (errorInfo?["NSAppleScriptErrorMessage"] as? String)
+                        ?? "Administrator authorization was cancelled or the privileged helper exited before connecting."
+
+                    let message = startupOutput.isEmpty
+                        ? baseMessage
+                        : "\(baseMessage) Helper output: \(startupOutput)"
+
+                    completion(.failure(ServerAPIError(
+                        statusCode: number,
+                        message: message
+                    )))
+                } else {
+                    completion(.success(()))
+                }
             }
         }
     }
