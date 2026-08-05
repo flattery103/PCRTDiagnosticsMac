@@ -16,6 +16,16 @@ enum MacCollectors {
         let temperatureCelsius: Double?
     }
 
+    struct MountedExternalVolume {
+        let identifier: String
+        let name: String
+        let mountPoint: String
+        let filesystem: String
+        let parentWholeDisk: String
+        let writable: Bool
+        let availableBytes: UInt64
+    }
+
     static func command(_ context: DiagnosticContext, key: String, executable: String, arguments: [String] = [], timeout: TimeInterval = 60) -> CommandResult {
         let result = context.commandRunner.run(executable, arguments, timeout: timeout)
         context.recordCommand(key, result)
@@ -28,8 +38,8 @@ enum MacCollectors {
         return (result, object)
     }
 
-    static func physicalDisks(_ context: DiagnosticContext) -> [PhysicalDisk] {
-        let result = command(context, key: "diskutil-list-plist", executable: "/usr/sbin/diskutil", arguments: ["list", "-plist"], timeout: 60)
+    static func physicalDisks(_ context: DiagnosticContext, keyPrefix: String = "") -> [PhysicalDisk] {
+        let result = command(context, key: "\(keyPrefix)diskutil-list-plist", executable: "/usr/sbin/diskutil", arguments: ["list", "-plist"], timeout: 60)
         guard result.exitCode == 0,
               let data = result.stdout.data(using: .utf8),
               let root = SystemUtilities.plistDictionary(data),
@@ -54,7 +64,7 @@ enum MacCollectors {
 
             let infoResult = command(
                 context,
-                key: "diskutil-info-\(identifier)",
+                key: "\(keyPrefix)diskutil-info-\(identifier)",
                 executable: "/usr/sbin/diskutil",
                 arguments: ["info", "-plist", "/dev/\(identifier)"],
                 timeout: 30
@@ -110,6 +120,63 @@ enum MacCollectors {
         return output.sorted { $0.identifier.localizedStandardCompare($1.identifier) == .orderedAscending }
     }
 
+    static func mountedExternalVolumes(_ context: DiagnosticContext, keyPrefix: String = "external-") -> [MountedExternalVolume] {
+        let result = command(context, key: "\(keyPrefix)diskutil-list-volumes", executable: "/usr/sbin/diskutil", arguments: ["list", "-plist"], timeout: 60)
+        guard result.exitCode == 0,
+              let data = result.stdout.data(using: .utf8),
+              let root = SystemUtilities.plistDictionary(data),
+              let identifiers = root["AllDisks"] as? [String] else { return [] }
+
+        var output: [MountedExternalVolume] = []
+        var seenMounts = Set<String>()
+        for identifier in identifiers {
+            let infoResult = command(
+                context,
+                key: "\(keyPrefix)diskutil-volume-info-\(identifier)",
+                executable: "/usr/sbin/diskutil",
+                arguments: ["info", "-plist", "/dev/\(identifier)"],
+                timeout: 20
+            )
+            guard infoResult.exitCode == 0,
+                  let infoData = infoResult.stdout.data(using: .utf8),
+                  let info = SystemUtilities.plistDictionary(infoData),
+                  let mountPoint = info["MountPoint"] as? String,
+                  !mountPoint.isEmpty,
+                  !seenMounts.contains(mountPoint) else { continue }
+
+            let internalMedia = (info["Internal"] as? Bool) ?? true
+            let externalFlag = (info["RemovableMediaOrExternalDevice"] as? Bool) ?? false
+            guard !internalMedia || externalFlag else { continue }
+
+            let writable = (info["WritableVolume"] as? Bool) ?? false
+            let name = (info["VolumeName"] as? String) ?? identifier
+            let filesystem = (info["FilesystemType"] as? String)
+                ?? (info["FilesystemName"] as? String)
+                ?? (info["Content"] as? String)
+                ?? "Not reported"
+            let parent = (info["ParentWholeDisk"] as? String) ?? identifier
+            let attributes = try? FileManager.default.attributesOfFileSystem(forPath: mountPoint)
+            let available = numericUInt64(attributes?[.systemFreeSize]) ?? 0
+            output.append(MountedExternalVolume(
+                identifier: identifier,
+                name: name,
+                mountPoint: mountPoint,
+                filesystem: filesystem,
+                parentWholeDisk: parent,
+                writable: writable,
+                availableBytes: available
+            ))
+            seenMounts.insert(mountPoint)
+        }
+        return output.sorted { $0.mountPoint.localizedStandardCompare($1.mountPoint) == .orderedAscending }
+    }
+
+    static func batteryDictionary(_ data: Data) -> [String: Any]? {
+        guard let object = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) else { return nil }
+        if let array = object as? [[String: Any]] { return array.first }
+        return object as? [String: Any]
+    }
+
     static func nvmeHealthDictionary(_ value: Any?) -> [String: UInt64] {
         guard let dictionary = value as? [String: Any] else { return [:] }
         var result: [String: UInt64] = [:]
@@ -144,6 +211,27 @@ enum MacCollectors {
         if let value = value as? Int { return value >= 0 ? UInt64(value) : nil }
         if let value = value as? NSNumber { return value.uint64Value }
         if let value = value as? String { return UInt64(value) }
+        return nil
+    }
+
+    static func numericInt64(_ value: Any?) -> Int64? {
+        if let value = value as? Int64 { return value }
+        if let value = value as? Int { return Int64(value) }
+        if let value = value as? NSNumber { return value.int64Value }
+        if let value = value as? String { return Int64(value) }
+        return nil
+    }
+
+    static func booleanValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        if let value = value as? String {
+            switch value.lowercased() {
+            case "true", "yes", "1": return true
+            case "false", "no", "0": return false
+            default: return nil
+            }
+        }
         return nil
     }
 

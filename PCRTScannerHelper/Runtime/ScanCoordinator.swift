@@ -21,6 +21,7 @@ final class ScanCoordinator {
             context.logger.write("Starting test: \(step.displayName)")
             context.message(type: .progress, message: "Running \(step.displayName)", test: step.displayName, completed: completedBefore, total: total, percent: percent)
             let started = Date()
+            if isWorkload(step.identifier) { context.markWorkloadStart(started) }
             var result: DiagnosticResult
             do {
                 result = try run(step.identifier)
@@ -43,6 +44,15 @@ final class ScanCoordinator {
         return paths
     }
 
+    private func isWorkload(_ identifier: ScanStepIdentifier) -> Bool {
+        switch identifier {
+        case .cpuWorkload, .memoryPatterns, .memoryPressure, .physicalDriveRead, .diskWriteRead, .gpuFunctionalWorkload, .externalDriveHealth:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func run(_ identifier: ScanStepIdentifier) throws -> DiagnosticResult {
         switch identifier {
         case .administratorPermissions:
@@ -62,7 +72,10 @@ final class ScanCoordinator {
         case .batteryPower: return MacCollectors.batteryPower(context)
         case .usbThunderboltPCI: return MacCollectors.devices(context)
         case .gpuDisplayMetal: return MacCollectors.gpuDisplayMetal(context)
+        case .gpuFunctionalWorkload: return try MacCollectors.gpuFunctionalWorkload(context)
+        case .externalDriveHealth: return try MacCollectors.externalDriveHealth(context)
         case .networkQuality: return MacCollectors.networkQuality(context)
+        case .postWorkloadEvents: return MacCollectors.postWorkloadEventReview(context)
         case .panicShutdownHistory: return MacCollectors.panicAndShutdownHistory(context)
         case .servicesHealth: return MacCollectors.servicesHealth(context)
         case .softwareUpdates: return MacCollectors.softwareUpdates(context)

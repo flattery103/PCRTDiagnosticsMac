@@ -5,53 +5,255 @@ extension MacCollectors {
     static func networkQuality(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
         let route = command(context, key: "route-default", executable: "/sbin/route", arguments: ["-n", "get", "default"], timeout: 20)
+        let route6 = command(context, key: "route-default-ipv6", executable: "/sbin/route", arguments: ["-n", "get", "-inet6", "default"], timeout: 20)
         let ifconfig = command(context, key: "ifconfig-all", executable: "/sbin/ifconfig", arguments: ["-a"], timeout: 30)
         let dns = command(context, key: "scutil-dns", executable: "/usr/sbin/scutil", arguments: ["--dns"], timeout: 30)
         let counters = command(context, key: "netstat-interfaces", executable: "/usr/sbin/netstat", arguments: ["-ib"], timeout: 30)
-        let dnsTest = command(context, key: "dns-resolution", executable: "/usr/bin/dscacheutil", arguments: ["-q", "host", "-a", "name", "scan.pcrtdiag.com"], timeout: 20)
-        let https = command(context, key: "https-health", executable: "/usr/bin/curl", arguments: ["--silent", "--show-error", "--fail", "--max-time", "15", "https://scan.pcrtdiag.com:8443/api/v1/health"], timeout: 20)
         let gateway = parseRouteValue(route.stdout, key: "gateway")
         let interface = parseRouteValue(route.stdout, key: "interface")
-        let gatewayPing = gateway.map { command(context, key: "ping-gateway", executable: "/sbin/ping", arguments: ["-c", "4", "-W", "1000", $0], timeout: 15) }
-        let internetPing = command(context, key: "ping-internet", executable: "/sbin/ping", arguments: ["-c", "4", "-W", "1000", "1.1.1.1"], timeout: 15)
+        let ipv6Interface = parseRouteValue(route6.stdout, key: "interface")
+        let hasIPv6Route = route6.exitCode == 0 && ipv6Interface != nil
+
+        var dnsSamples: [CommandResult] = []
+        for index in 1...3 {
+            dnsSamples.append(command(context, key: "dns-resolution-\(index)", executable: "/usr/bin/dscacheutil", arguments: ["-q", "host", "-a", "name", "scan.pcrtdiag.com"], timeout: 20))
+        }
+        let health = command(context, key: "https-health", executable: "/usr/bin/curl", arguments: ["--silent", "--show-error", "--fail", "--max-time", "15", "https://scan.pcrtdiag.com:8443/api/v1/health"], timeout: 20)
+        var ipv4HTTPS: [CommandResult] = []
+        for index in 1...5 {
+            ipv4HTTPS.append(command(
+                context,
+                key: "https-ipv4-quality-\(index)",
+                executable: "/usr/bin/curl",
+                arguments: ["-4", "--silent", "--show-error", "--output", "/dev/null", "--write-out", "%{http_code} %{time_namelookup} %{time_connect} %{time_appconnect} %{time_starttransfer} %{time_total}", "--connect-timeout", "5", "--max-time", "15", "https://scan.pcrtdiag.com:8443/api/v1/health"],
+                timeout: 20
+            ))
+        }
+        var ipv6HTTPS: [CommandResult] = []
+        if hasIPv6Route {
+            for index in 1...3 {
+                ipv6HTTPS.append(command(
+                    context,
+                    key: "https-ipv6-quality-\(index)",
+                    executable: "/usr/bin/curl",
+                    arguments: ["-6", "--silent", "--show-error", "--output", "/dev/null", "--write-out", "%{http_code} %{time_namelookup} %{time_connect} %{time_appconnect} %{time_starttransfer} %{time_total}", "--connect-timeout", "5", "--max-time", "15", "https://scan.pcrtdiag.com:8443/api/v1/health"],
+                    timeout: 20
+                ))
+            }
+        }
+
+        let gatewayPing = gateway.map { command(context, key: "ping-gateway", executable: "/sbin/ping", arguments: ["-c", "10", "-W", "1000", $0], timeout: 20) }
+        let internetPing = command(context, key: "ping-internet", executable: "/sbin/ping", arguments: ["-c", "10", "-W", "1000", "1.1.1.1"], timeout: 20)
+        let wifi = systemProfiler(context, dataTypes: ["SPAirPortDataType"], key: "system-profiler-wifi", timeout: 75)
+        let wdutil = FileManager.default.isExecutableFile(atPath: "/usr/bin/wdutil")
+            ? command(context, key: "wdutil-info", executable: "/usr/bin/wdutil", arguments: ["info"], timeout: 30)
+            : nil
+        let wifiFlat = wifi.1.map { SystemUtilities.flatten($0) } ?? [:]
+        let wifiCombined = wifiFlat.map { "\($0.key): \($0.value)" }.joined(separator: "\n") + "\n" + (wdutil?.combinedOutput ?? "")
+        let wifiSignal = parseWiFiSignal(wifiCombined)
+        let wifiRate = parseFirstDouble(wifiCombined, patterns: ["(?:Tx Rate|Transmit Rate|lastTxRate)[^0-9]*([0-9.]+)", "spairport_network_rate[^0-9]*([0-9.]+)"])
+        let wifiChannel = firstMatchingWiFiValue(wifiFlat, keyNeedles: ["channel"]) ?? parseFirstString(wifiCombined, pattern: "(?:Channel|channel)[^:]*:\\s*([^\\n]+)")
+        let wifiPHY = firstMatchingWiFiValue(wifiFlat, keyNeedles: ["phy", "mode"]) ?? firstMatchingWiFiValue(wifiFlat, keyNeedles: ["supported_phymodes"])
+        let activeVPNs = activeTunnelInterfaces(ifconfig.stdout)
+
+        var networkQuality: CommandResult?
+        let mode = context.config.scanType.lowercased().replacingOccurrences(of: "-", with: "")
+        if FileManager.default.isExecutableFile(atPath: "/usr/bin/networkQuality") && ["full", "deep", "burnin"].contains(mode) {
+            networkQuality = command(context, key: "network-quality-built-in", executable: "/usr/bin/networkQuality", arguments: ["-s"], timeout: 75)
+        }
+
+        let gatewayLoss = gatewayPing.flatMap { parsePacketLoss($0.stdout) }
+        let internetLoss = parsePacketLoss(internetPing.stdout)
+        let gatewayStats = gatewayPing.flatMap { parsePingStatistics($0.stdout) }
+        let internetStats = parsePingStatistics(internetPing.stdout)
+        let dnsSuccesses = dnsSamples.filter { $0.exitCode == 0 && !$0.stdout.isEmpty }.count
+        let dnsAverage = dnsSamples.isEmpty ? nil : dnsSamples.map(\.duration).reduce(0, +) / Double(dnsSamples.count)
+        let ipv4Metrics = ipv4HTTPS.compactMap(parseHTTPMetric)
+        let ipv4Successes = ipv4Metrics.filter { $0.code >= 200 && $0.code < 400 }.count
+        let ipv6Metrics = ipv6HTTPS.compactMap(parseHTTPMetric)
+        let ipv6Successes = ipv6Metrics.filter { $0.code >= 200 && $0.code < 400 }.count
 
         var status: CheckStatus = .pass
         var reasons: [String] = []
         if route.exitCode != 0 || gateway == nil {
             status = .warning
-            reasons.append("No usable default gateway was reported.")
+            reasons.append("No usable IPv4 default gateway was reported.")
         }
-        if dnsTest.exitCode != 0 {
+        if dnsSuccesses == 0 {
             status = .warning
-            reasons.append("DNS resolution for scan.pcrtdiag.com failed.")
+            reasons.append("All DNS resolution samples for scan.pcrtdiag.com failed.")
         }
-        if https.exitCode != 0 {
+        if health.exitCode != 0 || ipv4Successes < 4 {
             status = .warning
-            reasons.append("HTTPS connectivity to the PCRT server failed.")
+            reasons.append("Repeated IPv4 HTTPS connectivity to the PCRT server was unreliable.")
         }
-        let gatewayLoss = gatewayPing.flatMap { parsePacketLoss($0.stdout) }
-        let internetLoss = parsePacketLoss(internetPing.stdout)
-        if let loss = gatewayLoss, loss > 5 {
+        if let loss = gatewayLoss, loss > 10 {
             status = .warning
             reasons.append(String(format: "Gateway packet loss was %.1f%%.", loss))
         }
-        if let loss = internetLoss, loss > 5 {
+        if hasIPv6Route && !ipv6HTTPS.isEmpty && ipv6Successes == 0 {
             status = .warning
-            reasons.append(String(format: "Internet packet loss was %.1f%%.", loss))
+            reasons.append("An IPv6 default route was present, but all IPv6 HTTPS samples failed.")
         }
-        let gatewayStats = gatewayPing.flatMap { parsePingStatistics($0.stdout) }
-        let internetStats = parsePingStatistics(internetPing.stdout)
-        if route.exitCode == -1 && ifconfig.exitCode == -1 && dns.exitCode == -1 { status = .incomplete }
-        context.appendInventory(InventorySection(title: "Network", items: ["Primary interface": interface ?? "Not reported", "Default gateway": gateway ?? "Not reported", "DNS resolution": dnsTest.exitCode == 0 ? "Pass" : "Failed", "PCRT HTTPS": https.exitCode == 0 ? "Pass" : "Failed", "Gateway packet loss": gatewayLoss.map { String(format: "%.1f%%", $0) } ?? "Not available", "Gateway average latency": gatewayStats.map { String(format: "%.1f ms", $0.average) } ?? "Not available", "Internet packet loss": internetLoss.map { String(format: "%.1f%%", $0) } ?? "Not available", "Internet average latency": internetStats.map { String(format: "%.1f ms", $0.average) } ?? "Not available"]))
-        let summary = status == .pass ? "Gateway, DNS, HTTPS, packet-loss, and interface evidence did not show an obvious connectivity problem." : status == .warning ? "One or more network connectivity checks require review." : "Network evidence could not be collected completely."
-        return DiagnosticResult(category: "Network", domain: "Network / Power", name: "Network quality and connectivity", status: status, summary: summary, reason: reasons.isEmpty ? nil : reasons.joined(separator: " "), recommendedAction: status == .warning ? "Verify the active interface, gateway, DNS, and Internet connection, then retry the upload." : nil, details: ["Interface: \(interface ?? "Not reported")", "Gateway: \(gateway ?? "Not reported")", "Gateway latency: \(gatewayStats.map { String(format: "min %.1f / avg %.1f / max %.1f / stddev %.1f ms", $0.minimum, $0.average, $0.maximum, $0.stddev) } ?? "Not available")", "Internet latency: \(internetStats.map { String(format: "min %.1f / avg %.1f / max %.1f / stddev %.1f ms", $0.minimum, $0.average, $0.maximum, $0.stddev) } ?? "Not available")", "HTTPS response: \(SystemUtilities.firstLine(https.combinedOutput))", "Interface inventory size: \(ifconfig.stdout.count) characters", "Counter inventory size: \(counters.stdout.count) characters"], durationSeconds: Date().timeIntervalSince(started))
+        if let rssi = wifiSignal.rssi, rssi <= -75 {
+            status = .warning
+            reasons.append("Wi-Fi signal strength was weak at \(rssi) dBm.")
+        }
+        if let snr = wifiSignal.snr, snr < 15 {
+            status = .warning
+            reasons.append("Wi-Fi signal-to-noise ratio was low at \(snr) dB.")
+        }
+        if route.exitCode == -1 && ifconfig.exitCode == -1 && dns.exitCode == -1 {
+            status = .incomplete
+        }
+
+        var details = [
+            "Primary interface: \(interface ?? "Not reported")",
+            "Default gateway: \(gateway ?? "Not reported")",
+            "Gateway latency: \(gatewayStats.map { String(format: "min %.1f / avg %.1f / max %.1f / stddev %.1f ms", $0.minimum, $0.average, $0.maximum, $0.stddev) } ?? "Not available")",
+            "Gateway packet loss: \(gatewayLoss.map { String(format: "%.1f%%", $0) } ?? "Not available")",
+            "Internet ICMP latency: \(internetStats.map { String(format: "min %.1f / avg %.1f / max %.1f / stddev %.1f ms", $0.minimum, $0.average, $0.maximum, $0.stddev) } ?? "Not available")",
+            "Internet ICMP packet loss: \(internetLoss.map { String(format: "%.1f%%", $0) } ?? "Not available")",
+            "DNS samples: \(dnsSuccesses)/\(dnsSamples.count) successful; average duration \(dnsAverage.map { String(format: "%.3f sec", $0) } ?? "Not available")",
+            "IPv4 HTTPS samples: \(ipv4Successes)/\(ipv4HTTPS.count) successful; average total time \(averageHTTPTime(ipv4Metrics))",
+            hasIPv6Route ? "IPv6 HTTPS samples: \(ipv6Successes)/\(ipv6HTTPS.count) successful; average total time \(averageHTTPTime(ipv6Metrics))" : "IPv6: No usable default route was reported; IPv6 connectivity was not required.",
+            "HTTPS health response: \(SystemUtilities.firstLine(health.combinedOutput))",
+            "Active VPN/tunnel interfaces: \(activeVPNs.isEmpty ? "None detected" : activeVPNs.joined(separator: ", "))"
+        ]
+        if let rssi = wifiSignal.rssi { details.append("Wi-Fi RSSI: \(rssi) dBm") }
+        if let noise = wifiSignal.noise { details.append("Wi-Fi noise: \(noise) dBm") }
+        if let snr = wifiSignal.snr { details.append("Wi-Fi signal-to-noise ratio: \(snr) dB") }
+        if let wifiRate { details.append(String(format: "Wi-Fi negotiated/transmit rate: %.1f Mbps", wifiRate)) }
+        if let wifiChannel { details.append("Wi-Fi channel: \(wifiChannel)") }
+        if let wifiPHY { details.append("Wi-Fi PHY mode: \(wifiPHY)") }
+        if let networkQuality {
+            details.append("Built-in networkQuality: \(networkQuality.exitCode == 0 ? SystemUtilities.firstLine(networkQuality.combinedOutput) : "Unavailable (\(SystemUtilities.firstLine(networkQuality.combinedOutput)))")")
+            details.append(contentsOf: selectedLines(networkQuality.combinedOutput, containingAny: ["uplink", "downlink", "responsiveness", "rpm"]).prefix(20))
+        } else if FileManager.default.isExecutableFile(atPath: "/usr/bin/networkQuality") {
+            details.append("Built-in upload/download responsiveness testing is reserved for Full, Deep, and Burn-in scans.")
+        }
+        if let loss = internetLoss, loss > 10, ipv4Successes == ipv4HTTPS.count {
+            details.append("Internet ICMP loss was observed, but all HTTPS samples succeeded; remote ICMP filtering or deprioritization may explain the difference.")
+        }
+        details.append("Interface inventory size: \(ifconfig.stdout.count) characters")
+        details.append("Counter inventory size: \(counters.stdout.count) characters")
+
+        context.appendInventory(InventorySection(title: "Network", items: [
+            "Primary interface": interface ?? "Not reported",
+            "Default gateway": gateway ?? "Not reported",
+            "DNS samples": "\(dnsSuccesses)/\(dnsSamples.count)",
+            "IPv4 HTTPS": "\(ipv4Successes)/\(ipv4HTTPS.count)",
+            "IPv6 route": hasIPv6Route ? "Available on \(ipv6Interface ?? "unknown interface")" : "Not available",
+            "Wi-Fi RSSI": wifiSignal.rssi.map { "\($0) dBm" } ?? "Not available",
+            "Wi-Fi SNR": wifiSignal.snr.map { "\($0) dB" } ?? "Not available",
+            "Active tunnels": activeVPNs.isEmpty ? "None" : activeVPNs.joined(separator: ", ")
+        ]))
+
+        let summary = status == .pass ? "Wi-Fi, gateway, DNS, repeated HTTPS, IPv4/IPv6, VPN, and available built-in quality evidence did not show an obvious connectivity problem." : status == .warning ? "One or more network quality or connectivity checks require review." : "Network evidence could not be collected completely."
+        return DiagnosticResult(
+            category: "Network",
+            domain: "Network / Power",
+            name: "Wi-Fi, IPv4, IPv6, DNS, VPN, and Internet quality",
+            status: status,
+            summary: summary,
+            reason: reasons.isEmpty ? nil : reasons.joined(separator: " "),
+            recommendedAction: status == .warning ? "Verify Wi-Fi signal, gateway, DNS, VPN routing, IPv6 configuration, and Internet connection, then repeat the upload." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started),
+            raw: [
+                "dns_successes": .number(Double(dnsSuccesses)),
+                "ipv4_https_successes": .number(Double(ipv4Successes)),
+                "ipv6_https_successes": .number(Double(ipv6Successes)),
+                "wifi_rssi_dbm": wifiSignal.rssi.map { .number(Double($0)) } ?? .null,
+                "wifi_noise_dbm": wifiSignal.noise.map { .number(Double($0)) } ?? .null,
+                "active_tunnels": .array(activeVPNs.map { .string($0) })
+            ]
+        )
+    }
+
+    static func postWorkloadEventReview(_ context: DiagnosticContext) -> DiagnosticResult {
+        let started = Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let windowStart = context.workloadStartedAt
+        let predicate = """
+        (eventMessage CONTAINS[c] "I/O error") OR
+        (eventMessage CONTAINS[c] "media error") OR
+        (eventMessage CONTAINS[c] "data integrity") OR
+        (eventMessage CONTAINS[c] "GPU Restart") OR
+        (eventMessage CONTAINS[c] "channel exception") OR
+        ((eventMessage CONTAINS[c] "IOGPU" OR eventMessage CONTAINS[c] "AGX") AND (eventMessage CONTAINS[c] "fault" OR eventMessage CONTAINS[c] "hang" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "timeout")) OR
+        ((eventMessage CONTAINS[c] "NVMe" OR eventMessage CONTAINS[c] "AppleANS") AND (eventMessage CONTAINS[c] "error" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "timeout" OR eventMessage CONTAINS[c] "critical")) OR
+        (eventMessage CONTAINS[c] "APFS" AND (eventMessage CONTAINS[c] "corrupt" OR eventMessage CONTAINS[c] "invalid" OR eventMessage CONTAINS[c] "error")) OR
+        (eventMessage CONTAINS[c] "thermal" AND (eventMessage CONTAINS[c] "serious" OR eventMessage CONTAINS[c] "critical" OR eventMessage CONTAINS[c] "shutdown")) OR
+        (eventMessage CONTAINS[c] "memory pressure" AND eventMessage CONTAINS[c] "critical") OR
+        (eventMessage CONTAINS[c] "panic") OR
+        ((eventMessage CONTAINS[c] "USB" OR eventMessage CONTAINS[c] "Thunderbolt") AND (eventMessage CONTAINS[c] "disconnect" OR eventMessage CONTAINS[c] "reset" OR eventMessage CONTAINS[c] "overcurrent"))
+        """
+        let logs = command(
+            context,
+            key: "post-workload-hardware-log",
+            executable: "/usr/bin/log",
+            arguments: ["show", "--start", formatter.string(from: windowStart), "--style", "compact", "--predicate", predicate],
+            timeout: 35
+        )
+        let lines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+            let lower = line.lowercased()
+            return !line.contains("Timestamp") && !lower.contains("pcrt diagnostics") && !lower.contains("log show")
+        }
+        let storage = lines.filter { containsAny($0, ["i/o error", "media error", "data integrity", "nvme", "appleans", "apfs"]) }
+        let gpu = lines.filter { containsAny($0, ["gpu restart", "channel exception", "iogpu", "agx"]) }
+        let thermal = lines.filter { containsAny($0, ["thermal", "throttl"]) }
+        let memory = lines.filter { containsAny($0, ["memory pressure", "memorystatus", "jetsam"]) }
+        let panic = lines.filter { $0.localizedCaseInsensitiveContains("panic") }
+        let peripheral = lines.filter { containsAny($0, ["usb", "thunderbolt"]) }
+
+        var reasons: [String] = []
+        if !storage.isEmpty { reasons.append("Storage or APFS events were recorded during the workload window.") }
+        if !gpu.isEmpty { reasons.append("GPU reset, hang, or fault events were recorded during the workload window.") }
+        if !thermal.isEmpty { reasons.append("Serious thermal-management events were recorded during the workload window.") }
+        if !memory.isEmpty { reasons.append("Critical memory-pressure events were recorded during the workload window.") }
+        if !panic.isEmpty { reasons.append("Panic evidence was recorded during the workload window.") }
+        if !peripheral.isEmpty { reasons.append("USB or Thunderbolt reset/disconnect events were recorded during the workload window.") }
+
+        let status: CheckStatus
+        if !reasons.isEmpty { status = .warning }
+        else if logs.timedOut || logs.exitCode != 0 { status = .incomplete }
+        else { status = .pass }
+        var details = [
+            "Workload event-review start: \(formatter.string(from: windowStart))",
+            "Workload event-review finish: \(formatter.string(from: Date()))",
+            "Storage/APFS lines: \(storage.count)",
+            "GPU lines: \(gpu.count)",
+            "Thermal lines: \(thermal.count)",
+            "Memory-pressure lines: \(memory.count)",
+            "Panic lines: \(panic.count)",
+            "USB/Thunderbolt lines: \(peripheral.count)"
+        ]
+        details.append(contentsOf: lines.prefix(40))
+        return DiagnosticResult(
+            category: "macOS",
+            domain: "Workload Stability",
+            name: "Post-workload hardware event review",
+            status: status,
+            summary: status == .pass ? "No targeted storage, GPU, thermal, memory, panic, USB, or Thunderbolt event was found during the diagnostic workload window." : status == .warning ? "One or more hardware-related events occurred during the workload window and require review." : "The bounded post-workload event review could not be completed.",
+            reason: reasons.isEmpty ? (status == .incomplete ? "The targeted unified-log query timed out or returned an error." : nil) : reasons.joined(separator: " "),
+            recommendedAction: status == .warning ? "Review the named event lines alongside the functional test results, then repeat the affected workload after correcting software, cooling, cable, port, or storage conditions." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started),
+            raw: [
+                "window_start": .string(formatter.string(from: windowStart)),
+                "matched_lines": .number(Double(lines.count))
+            ]
+        )
     }
 
     static func panicAndShutdownHistory(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
-        let predicate = "eventMessage CONTAINS[c] \"Previous shutdown cause\" OR eventMessage CONTAINS[c] \"panic\" OR eventMessage CONTAINS[c] \"I/O error\" OR eventMessage CONTAINS[c] \"disk arbitration\" OR eventMessage CONTAINS[c] \"GPU Restart\""
-        let logs = command(context, key: "unified-hardware-log", executable: "/usr/bin/log", arguments: ["show", "--last", "30d", "--style", "compact", "--predicate", predicate], timeout: 90)
-        let last = command(context, key: "last-reboots", executable: "/usr/bin/last", arguments: ["reboot", "shutdown"], timeout: 30)
+        let predicate = "process == \"kernel\" AND (eventMessage CONTAINS[c] \"Previous shutdown cause\" OR eventMessage CONTAINS[c] \"panic\")"
+        let logs = command(context, key: "unified-panic-shutdown-log", executable: "/usr/bin/log", arguments: ["show", "--last", "7d", "--style", "compact", "--predicate", predicate], timeout: 25)
+        let last = command(context, key: "last-reboots", executable: "/usr/bin/last", arguments: ["reboot", "shutdown"], timeout: 20)
         let reportDirectory = URL(fileURLWithPath: "/Library/Logs/DiagnosticReports", isDirectory: true)
         let cutoff = Date().addingTimeInterval(-30 * 24 * 3600)
         let reportFiles = ((try? FileManager.default.contentsOfDirectory(at: reportDirectory, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])) ?? []).filter { url in
@@ -63,33 +265,27 @@ extension MacCollectors {
         let logLines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init)
         let shutdownLines = logLines.filter { $0.localizedCaseInsensitiveContains("Previous shutdown cause") }
         let panicLines = logLines.filter { $0.localizedCaseInsensitiveContains("panic") }
-        let storageLines = logLines.filter { $0.localizedCaseInsensitiveContains("I/O error") || $0.localizedCaseInsensitiveContains("disk arbitration") }
-        let gpuLines = logLines.filter { $0.localizedCaseInsensitiveContains("GPU Restart") }
         var status: CheckStatus = .pass
         var reasons: [String] = []
         if !reportFiles.isEmpty || !panicLines.isEmpty {
             status = .warning
-            reasons.append("Recent kernel panic evidence was found.")
+            reasons.append("Recent kernel panic or GPU diagnostic-report evidence was found.")
         }
         if !shutdownLines.isEmpty {
             status = .warning
             reasons.append("Unexpected-shutdown cause evidence was found.")
         }
-        if !storageLines.isEmpty || !gpuLines.isEmpty {
-            status = .warning
-            reasons.append("Recent storage or GPU log evidence requires review.")
-        }
         if logs.timedOut || logs.exitCode == -1 { status = status == .warning ? .warning : .incomplete }
         let files = reportFiles.prefix(20).map(\.lastPathComponent)
-        let details = ["Recent panic/kernel diagnostic files: \(reportFiles.count)", "Shutdown-cause lines: \(shutdownLines.count)", "Panic lines: \(panicLines.count)", "Storage I/O lines: \(storageLines.count)", "GPU restart lines: \(gpuLines.count)"] + files
-        return DiagnosticResult(category: "macOS", domain: "macOS Integrity", name: "Kernel panic, shutdown, and hardware-log review", status: status, summary: status == .pass ? "No recent kernel panic, unexpected-shutdown, storage I/O, or GPU restart evidence was found in the reviewed sources." : status == .warning ? "Recent panic, shutdown, storage, or GPU evidence requires review." : "Unified-log review could not be completed.", reason: reasons.isEmpty ? nil : reasons.joined(separator: " "), recommendedAction: status == .warning ? "Review the named DiagnosticReports and unified-log entries, then repeat hardware tests after correcting any software or peripheral cause." : nil, details: details + ["Boot/shutdown history entries: \(last.stdout.split(whereSeparator: \.isNewline).count)"], durationSeconds: Date().timeIntervalSince(started))
+        let details = ["Recent panic/kernel/GPU diagnostic files: \(reportFiles.count)", "Shutdown-cause lines: \(shutdownLines.count)", "Panic lines: \(panicLines.count)"] + files
+        return DiagnosticResult(category: "macOS", domain: "macOS Integrity", name: "Kernel panic and unexpected-shutdown history", status: status, summary: status == .pass ? "No recent kernel panic or unexpected-shutdown evidence was found in the bounded review." : status == .warning ? "Recent panic or unexpected-shutdown evidence requires review." : "The bounded panic and shutdown review could not be completed.", reason: reasons.isEmpty ? nil : reasons.joined(separator: " "), recommendedAction: status == .warning ? "Review the named DiagnosticReports and shutdown evidence, then repeat hardware tests after correcting any software or peripheral cause." : nil, details: details + ["Boot/shutdown history entries: \(last.stdout.split(whereSeparator: \.isNewline).count)"], durationSeconds: Date().timeIntervalSince(started))
     }
 
     static func servicesHealth(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
         let predicate = "process == \"launchd\" AND (eventMessage CONTAINS[c] \"exited with abnormal code\" OR eventMessage CONTAINS[c] \"crashed\" OR eventMessage CONTAINS[c] \"throttling respawn\")"
-        let logs = command(context, key: "launchd-failure-log", executable: "/usr/bin/log", arguments: ["show", "--last", "14d", "--style", "compact", "--predicate", predicate], timeout: 90)
-        let launchctl = command(context, key: "launchctl-system", executable: "/bin/launchctl", arguments: ["print", "system"], timeout: 90)
+        let logs = command(context, key: "launchd-failure-log", executable: "/usr/bin/log", arguments: ["show", "--last", "7d", "--style", "compact", "--predicate", predicate], timeout: 25)
+        let launchctl = command(context, key: "launchctl-system", executable: "/bin/launchctl", arguments: ["print", "system"], timeout: 30)
         let lines = logs.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.contains("Timestamp") }
         var grouped: [String: Int] = [:]
         for line in lines {
@@ -101,7 +297,7 @@ extension MacCollectors {
         if !repeated.isEmpty { status = .warning }
         else if logs.timedOut || (logs.exitCode != 0 && launchctl.exitCode != 0) { status = .incomplete }
         else { status = .pass }
-        return DiagnosticResult(category: "macOS", domain: "macOS Maintenance", name: "Failed and repeatedly crashing services", status: status, summary: status == .pass ? "No repeatedly abnormal launchd service pattern was found in the review period." : status == .warning ? "One or more launchd service failures repeated during the review period." : "Service and launchd evidence could not be reviewed completely.", reason: status == .warning ? "\(repeated.count) repeated launchd failure pattern(s) occurred at least three times." : nil, recommendedAction: status == .warning ? "Review the named launchd jobs and their owning applications; do not treat a stopped on-demand service as a failure by itself." : nil, details: repeated.prefix(15).map { "\($0.value)x: \($0.key)" } + ["System launchd inventory size: \(launchctl.stdout.count) characters"], durationSeconds: Date().timeIntervalSince(started))
+        return DiagnosticResult(category: "macOS", domain: "macOS Maintenance", name: "Failed and repeatedly crashing services", status: status, summary: status == .pass ? "No repeatedly abnormal launchd service pattern was found in the bounded seven-day review." : status == .warning ? "One or more launchd service failures repeated during the review period." : "Service and launchd evidence could not be reviewed completely.", reason: status == .warning ? "\(repeated.count) repeated launchd failure pattern(s) occurred at least three times." : nil, recommendedAction: status == .warning ? "Review the named launchd jobs and their owning applications; do not treat a stopped on-demand service as a failure by itself." : nil, details: repeated.prefix(15).map { "\($0.value)x: \($0.key)" } + ["System launchd inventory size: \(launchctl.stdout.count) characters"], durationSeconds: Date().timeIntervalSince(started))
     }
 
     static func softwareUpdates(_ context: DiagnosticContext) -> DiagnosticResult {
@@ -292,6 +488,94 @@ extension MacCollectors {
             seen.insert(trimmed)
             return trimmed
         }
+    }
+
+    private struct HTTPMetric {
+        let code: Int
+        let dns: Double
+        let connect: Double
+        let tls: Double
+        let firstByte: Double
+        let total: Double
+    }
+
+    private static func parseHTTPMetric(_ result: CommandResult) -> HTTPMetric? {
+        let fields = result.stdout.split(whereSeparator: \.isWhitespace)
+        guard fields.count >= 6,
+              let code = Int(fields[0]),
+              let dns = Double(fields[1]),
+              let connect = Double(fields[2]),
+              let tls = Double(fields[3]),
+              let firstByte = Double(fields[4]),
+              let total = Double(fields[5]) else { return nil }
+        return HTTPMetric(code: code, dns: dns, connect: connect, tls: tls, firstByte: firstByte, total: total)
+    }
+
+    private static func averageHTTPTime(_ metrics: [HTTPMetric]) -> String {
+        guard !metrics.isEmpty else { return "Not available" }
+        return String(format: "%.3f sec", metrics.map(\.total).reduce(0, +) / Double(metrics.count))
+    }
+
+    private static func parseWiFiSignal(_ text: String) -> (rssi: Int?, noise: Int?, snr: Int?) {
+        let pairPatterns = [
+            "(?:Signal / Noise|agrCtlRSSI[^\\n]*agrCtlNoise)[^\\-0-9]*(-?[0-9]+)[^\\-0-9]+(-?[0-9]+)",
+            "RSSI[^\\-0-9]*(-?[0-9]+)[^\\n]*Noise[^\\-0-9]*(-?[0-9]+)"
+        ]
+        for pattern in pairPatterns {
+            if let values = regexIntegers(text, pattern: pattern, count: 2) {
+                return (values[0], values[1], values[0] - values[1])
+            }
+        }
+        let rssi = regexIntegers(text, pattern: "(?:RSSI|agrCtlRSSI|signal)[^\\-0-9]*(-?[0-9]+)", count: 1)?.first
+        let noise = regexIntegers(text, pattern: "(?:Noise|agrCtlNoise)[^\\-0-9]*(-?[0-9]+)", count: 1)?.first
+        return (rssi, noise, rssi.flatMap { r in noise.map { r - $0 } })
+    }
+
+    private static func regexIntegers(_ text: String, pattern: String, count: Int) -> [Int]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > count else { return nil }
+        var values: [Int] = []
+        for index in 1...count {
+            guard let valueRange = Range(match.range(at: index), in: text), let value = Int(text[valueRange]) else { return nil }
+            values.append(value)
+        }
+        return values
+    }
+
+    private static func parseFirstDouble(_ text: String, patterns: [String]) -> Double? {
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            if let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 1,
+               let valueRange = Range(match.range(at: 1), in: text), let value = Double(text[valueRange]) { return value }
+        }
+        return nil
+    }
+
+    private static func parseFirstString(_ text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 1,
+              let valueRange = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func firstMatchingWiFiValue(_ flat: [String: String], keyNeedles: [String]) -> String? {
+        flat.sorted { $0.key < $1.key }.first { key, _ in keyNeedles.allSatisfy { key.localizedCaseInsensitiveContains($0) } }?.value
+    }
+
+    private static func activeTunnelInterfaces(_ ifconfig: String) -> [String] {
+        ifconfig.split(whereSeparator: \.isNewline).compactMap { line in
+            let text = String(line)
+            guard text.hasPrefix("utun"), text.localizedCaseInsensitiveContains("UP") else { return nil }
+            return text.split(separator: ":", maxSplits: 1).first.map(String.init)
+        }
+    }
+
+    private static func containsAny(_ text: String, _ needles: [String]) -> Bool {
+        let lower = text.lowercased()
+        return needles.contains(where: { lower.contains($0) })
     }
 
     private static func parseRouteValue(_ output: String, key: String) -> String? {

@@ -10,6 +10,8 @@ final class DiagnosticContext {
     let cancellation: CancellationController
     private let sendMessage: (IPCMessage) -> Void
     private var sequence = 100
+    private let workloadLock = NSLock()
+    private var firstWorkloadStart: Date?
     var run: DiagnosticRun
 
     init(config: HelperScanConfiguration, workspace: URL, logger: RunLogger, commandRunner: CommandRunner, cancellation: CancellationController, runID: String, sendMessage: @escaping (IPCMessage) -> Void) {
@@ -48,6 +50,18 @@ final class DiagnosticContext {
 
     func recordCommand(_ key: String, _ result: CommandResult) {
         run.commands[key] = result.evidence
+    }
+
+    func markWorkloadStart(_ date: Date = Date()) {
+        workloadLock.lock()
+        if firstWorkloadStart == nil { firstWorkloadStart = date }
+        workloadLock.unlock()
+    }
+
+    var workloadStartedAt: Date {
+        workloadLock.lock()
+        defer { workloadLock.unlock() }
+        return firstWorkloadStart ?? run.startedLocal
     }
 
     func appendInventory(_ section: InventorySection) {

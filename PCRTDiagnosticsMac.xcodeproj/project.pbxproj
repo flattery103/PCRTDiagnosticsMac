@@ -585,7 +585,7 @@
 			<key>lastKnownFileType</key>
 			<string>net.daringfireball.markdown</string>
 			<key>path</key>
-			<string>RELEASE_NOTES_0.1.1.md</string>
+			<string>RELEASE_NOTES_0.1.2.md</string>
 			<key>sourceTree</key>
 			<string>&lt;group&gt;</string>
 		</dict>
@@ -1567,7 +1567,7 @@
 					<string>@executable_path/../Frameworks</string>
 				</array>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMac</string>
 				<key>PRODUCT_MODULE_NAME</key>
@@ -1610,7 +1610,7 @@
 					<string>@executable_path/../Frameworks</string>
 				</array>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMac</string>
 				<key>PRODUCT_MODULE_NAME</key>
@@ -1638,7 +1638,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTScannerHelper</string>
 				<key>PRODUCT_NAME</key>
@@ -1666,7 +1666,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTScannerHelper</string>
 				<key>PRODUCT_NAME</key>
@@ -1694,7 +1694,7 @@
 				<key>MACOSX_DEPLOYMENT_TARGET</key>
 				<string>11.0</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMacTests</string>
 				<key>PRODUCT_NAME</key>
@@ -1720,7 +1720,7 @@
 				<key>MACOSX_DEPLOYMENT_TARGET</key>
 				<string>11.0</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.1</string>
+				<string>0.1.2</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMacTests</string>
 				<key>PRODUCT_NAME</key>

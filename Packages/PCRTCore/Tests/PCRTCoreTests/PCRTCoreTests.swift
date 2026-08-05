@@ -48,7 +48,7 @@ final class PCRTCoreTests: XCTestCase {
     }
 
     func testReportsContainExpectedEvidenceBehavior() throws {
-        var run = DiagnosticRun(version: "0.1.1", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
+        var run = DiagnosticRun(version: "0.1.2", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
         run.results = [
             DiagnosticResult(category: "CPU", domain: "Hardware Functional", name: "CPU test", status: .pass, summary: "Passed", details: ["Evidence"]),
             DiagnosticResult(category: "Storage", domain: "Hardware Functional", name: "Disk test", status: .incomplete, summary: "Unavailable", details: ["Access denied"])
@@ -65,12 +65,27 @@ final class PCRTCoreTests: XCTestCase {
         XCTAssertTrue(thermal.contains(.temperatureSensors))
         XCTAssertTrue(thermal.contains(.thermalPressure))
         XCTAssertTrue(thermal.contains(.cpuWorkload))
+        XCTAssertTrue(thermal.contains(.gpuFunctionalWorkload))
+        XCTAssertTrue(thermal.contains(.postWorkloadEvents))
 
         let drive = ScanPlanner.plan(for: "drive", memoryPressurePercent: 0, diskTestMB: 1024).map(\.identifier)
         XCTAssertTrue(drive.contains(.temperatureSensors))
         XCTAssertTrue(drive.contains(.smartHealth))
         XCTAssertTrue(drive.contains(.physicalDriveRead))
         XCTAssertTrue(drive.contains(.filesystemHealth))
+        XCTAssertTrue(drive.contains(.externalDriveHealth))
+        XCTAssertTrue(drive.contains(.postWorkloadEvents))
+    }
+
+    func testFullPlanIncludesUnattendedReliabilityChecks() {
+        let full = ScanPlanner.plan(for: "full", memoryPressurePercent: 70, diskTestMB: 512).map(\.identifier)
+        XCTAssertTrue(full.contains(.gpuFunctionalWorkload))
+        XCTAssertTrue(full.contains(.externalDriveHealth))
+        XCTAssertTrue(full.contains(.networkQuality))
+        XCTAssertTrue(full.contains(.batteryPower))
+        XCTAssertTrue(full.contains(.postWorkloadEvents))
+        XCTAssertTrue(full.contains(.diskWriteRead))
+        XCTAssertTrue(full.firstIndex(of: .postWorkloadEvents)! > full.firstIndex(of: .gpuFunctionalWorkload)!)
     }
 
 }

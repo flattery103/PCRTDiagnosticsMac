@@ -1,12 +1,24 @@
-# PCRT Diagnostics for macOS 0.1.1
+# PCRT Diagnostics for macOS 0.1.2
 
 Native SwiftUI macOS client for the PCRT Diagnostics Server 0.1.4 API.
 
-This repository contains the complete source project for the first macOS client. It is designed as a portable `PCRT Diagnostics.app` with a bundled, temporary privileged scanner helper. The helper is launched only after the user clicks **Start** and approves the macOS administrator prompt. It is not installed as a daemon, launch agent, login item, or permanent privileged helper.
+This repository contains the complete source project for a portable `PCRT Diagnostics.app` with a bundled, temporary privileged scanner helper. The helper is launched only after the user clicks **Start** and approves the normal macOS administrator prompt. It is not installed as a daemon, launch agent, login item, or permanent privileged helper.
 
-## 0.1.1 focus: thermals and physical-drive health
+After Start and administrator approval, every diagnostic is automated. The client contains no camera, microphone, display-confirmation, keyboard, trackpad, speaker, or other interactive hardware checks.
 
-Version 0.1.1 corrects APFS synthesized-device counting, maps actual physical drives, parses native Apple NVMe health fields and storage temperature, verifies physical partition maps and the live root APFS volume, and limits raw sampling to validated physical media. Thermal reporting now separates numerical temperature coverage from macOS thermal-pressure status and records thermal state throughout the sustained CPU workload. See [`docs/THERMAL_STORAGE_0.1.1.md`](docs/THERMAL_STORAGE_0.1.1.md).
+## 0.1.2 focus: unattended hardware reliability
+
+Version 0.1.2 adds:
+
+- Deterministic Metal compute and offscreen-render validation with a sustained GPU workload.
+- Post-workload hardware-event review limited to the active diagnostic window.
+- Storage temperature, throughput, latency, native-error-counter, and SHA-256 trending.
+- Expanded battery health and an automatic charging observation when applicable.
+- Wi-Fi, IPv4, IPv6, DNS, VPN, gateway, and Internet-quality evidence.
+- Safe temporary integrity testing for writable mounted external drives.
+- Correct **Not Available** handling when macOS blocks optional raw-device access.
+
+See [`docs/AUTOMATED_RELIABILITY_0.1.2.md`](docs/AUTOMATED_RELIABILITY_0.1.2.md) and [`docs/THERMAL_STORAGE_0.1.1.md`](docs/THERMAL_STORAGE_0.1.1.md).
 
 ## Configured deployment targets
 
@@ -14,6 +26,17 @@ Version 0.1.1 corrects APFS synthesized-device counting, maps actual physical dr
 - Apple Silicon ARM64
 - Intel x86_64
 - One Universal 2 application bundle when built with the included Release workflow
+
+## Portable user workflow
+
+1. Download and extract the ZIP.
+2. Open `PCRT Diagnostics.app` from Downloads, Desktop, a technician tools folder, or external media.
+3. Complete macOS's first-run approval for the unsigned beta when required.
+4. Enter the five-character session code.
+5. Click **Start** and approve the administrator prompt.
+6. Leave the scan unattended until it finishes and uploads its reports.
+
+The app does not need to be moved to `/Applications`, and users do not need Terminal to start it.
 
 ## Server
 
@@ -82,19 +105,21 @@ chmod +x Scripts/*.sh
 The expected output is:
 
 ```text
-build/release/PCRTDiagnosticsMac-0.1.1.zip
+build/release/PCRTDiagnosticsMac-0.1.2.zip
 ```
 
 ## Status policy
 
-- **Fail** is reserved for confirmed calculation mismatches, data-integrity mismatches, confirmed short/raw read failures, or explicit native failure evidence.
-- Access restrictions, missing optional tools, unsupported hardware, and collector errors are **Incomplete** or **Not Available**.
+- **Fail** is reserved for confirmed calculation mismatches, data-integrity mismatches, successful-device short/read failures, Metal command failures, or explicit native failure evidence.
+- Optional raw-device access denied by macOS is **Not Available**, not Incomplete and not Fail.
+- Unsupported hardware and optional capabilities are **Not Available** or **Not Applicable**.
+- Unexpected collector failures may be **Incomplete** when a check that should have run could not finish.
 - macOS updates and configuration findings remain separate from hardware conclusions.
-- No repairs or firmware changes are performed.
+- No repairs, firmware changes, destructive disk tests, or forced unmounts are performed.
 
 ## Current validation status
 
-The shared `PCRTCore` Swift package contains platform-independent unit tests. The macOS application and helper require Xcode and a macOS test system for compilation and runtime validation. See `RELEASE_NOTES_0.1.1.md` for the beta validation scope.
+The shared `PCRTCore` Swift package contains platform-independent unit tests. Linux-hosted source checks can validate Swift syntax and project structure. The SwiftUI application, Metal workload, helper authorization, Universal 2 output, and hardware behavior require Xcode compilation and runtime validation on macOS. See `RELEASE_NOTES_0.1.2.md` for the beta validation scope.
 
 ## License
 
