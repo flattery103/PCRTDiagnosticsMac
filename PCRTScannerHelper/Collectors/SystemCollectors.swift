@@ -140,30 +140,158 @@ extension MacCollectors {
         return DiagnosticResult(category: "Security", domain: "Security / Configuration", name: "FileVault, SIP, Gatekeeper, and Secure Boot", status: status, summary: status == .pass ? "The available macOS security controls did not show an obvious disabled state." : status == .warning ? "One or more macOS security controls are disabled." : "macOS security-control status could not be collected completely.", reason: !warnings.isEmpty ? warnings.joined(separator: " ") : status == .incomplete ? "Fewer than two core security collectors returned usable output." : nil, recommendedAction: status == .warning ? "Confirm the configuration is intentional before changing FileVault, SIP, Gatekeeper, or startup security settings." : nil, details: ["FileVault: \(SystemUtilities.trimmed(fileVault.combinedOutput))", "SIP: \(SystemUtilities.trimmed(sip.combinedOutput))", "Gatekeeper: \(SystemUtilities.trimmed(gatekeeper.combinedOutput))", "Secure Boot: \(secureBoot.map { SystemUtilities.firstLine($0.combinedOutput) } ?? "Not directly available")"], durationSeconds: Date().timeIntervalSince(started))
     }
 
+    static func temperatureSensors(_ context: DiagnosticContext) -> DiagnosticResult {
+        let started = Date()
+        let disks = physicalDisks(context)
+        var details: [String] = []
+        var rawSensors: [JSONValue] = []
+        var highestStorageTemperature: Double?
+
+        for disk in disks {
+            if let temperature = disk.temperatureCelsius {
+                highestStorageTemperature = max(highestStorageTemperature ?? temperature, temperature)
+                details.append(String(format: "/dev/%@ %@ storage temperature: %.1f °C", disk.identifier, disk.model, temperature))
+                rawSensors.append(.object([
+                    "category": .string("Storage"),
+                    "device": .string("/dev/\(disk.identifier)"),
+                    "name": .string(disk.model),
+                    "temperature_celsius": .number(temperature),
+                    "source": .string("diskutil NVMe SMART data")
+                ]))
+            }
+        }
+
+        let architecture = SystemUtilities.machineArchitecture()
+        var intelTemperatureLines: [String] = []
+        if architecture == "x86_64" {
+            let smc = command(context, key: "powermetrics-smc-temperature", executable: "/usr/bin/powermetrics", arguments: ["-n", "3", "-i", "1000", "--samplers", "smc"], timeout: 15)
+            intelTemperatureLines = extractTemperatureLines(smc.combinedOutput)
+            details.append(contentsOf: intelTemperatureLines.prefix(50))
+        } else {
+            let sensorRegistry = command(context, key: "ioreg-temperature-sensor-availability", executable: "/usr/sbin/ioreg", arguments: ["-l", "-w0", "-p", "IOService"], timeout: 20)
+            let names = sensorRegistry.stdout.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+                let lower = line.lowercased()
+                return lower.contains("temperature") || lower.contains("temp sensor") || lower.contains("nand ch0 temp") || lower.contains("pmu tdev")
+            }
+            if !names.isEmpty {
+                details.append("Apple Silicon temperature-sensor services were detected, but macOS did not expose reliable CPU/GPU Celsius values through the supported command-line interfaces.")
+                details.append("Detected sensor-registry lines: \(min(names.count, 100))")
+            }
+        }
+
+        let numericalCount = rawSensors.count + intelTemperatureLines.count
+        let status: CheckStatus
+        var reason: String?
+        if let highestStorageTemperature, highestStorageTemperature >= 80 {
+            status = .warning
+            reason = String(format: "A physical storage device reported a high temperature of %.1f °C.", highestStorageTemperature)
+        } else if numericalCount > 0 {
+            status = .info
+        } else {
+            status = .notAvailable
+            reason = "This Mac did not expose reliable numerical temperatures through the currently supported read-only interfaces."
+        }
+
+        let summary: String
+        if status == .warning {
+            summary = "One or more reliable numerical temperature readings require review."
+        } else if numericalCount > 0 {
+            summary = "Collected \(numericalCount) reliable numerical temperature reading(s); unavailable CPU/GPU sensor categories are stated explicitly."
+        } else {
+            summary = "Reliable numerical temperature readings were not available on this Mac."
+        }
+
+        details.append("Numerical temperature coverage is reported independently from macOS thermal-pressure status.")
+        details.append("No missing numerical sensor category is marked Pass.")
+
+        return DiagnosticResult(
+            category: "Thermals",
+            domain: "Hardware Functional",
+            name: "Numerical temperature coverage",
+            status: status,
+            summary: summary,
+            reason: reason,
+            recommendedAction: status == .warning ? "Verify airflow and ambient conditions, allow the Mac to cool, and repeat the storage and thermal tests." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started),
+            raw: ["temperature_sensors": .array(rawSensors)]
+        )
+    }
+
     static func thermalPressure(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
         let pmset = command(context, key: "pmset-therm", executable: "/usr/bin/pmset", arguments: ["-g", "therm"], timeout: 30)
-        let powermetrics = command(context, key: "powermetrics-thermal", executable: "/usr/bin/powermetrics", arguments: ["-n", "1", "-i", "1000", "--samplers", "smc"], timeout: 20)
-        let thermalState: String
-        switch ProcessInfo.processInfo.thermalState {
-        case .nominal: thermalState = "Nominal"
-        case .fair: thermalState = "Fair"
-        case .serious: thermalState = "Serious"
-        case .critical: thermalState = "Critical"
-        @unknown default: thermalState = "Unknown"
-        }
-        let sensorLines = extractTemperatureLines(powermetrics.combinedOutput)
+        let thermal = command(context, key: "powermetrics-thermal-pressure", executable: "/usr/bin/powermetrics", arguments: ["-n", "3", "-i", "1000", "--samplers", "thermal"], timeout: 15)
+        let power = command(context, key: "powermetrics-cpu-gpu-power", executable: "/usr/bin/powermetrics", arguments: ["-n", "3", "-i", "1000", "--samplers", "cpu_power,gpu_power", "--show-plimits"], timeout: 15)
+
+        let processState = thermalStateName(ProcessInfo.processInfo.thermalState)
+        let pressureLines = selectedLines(thermal.combinedOutput, containingAny: ["pressure level", "thermal pressure"])
+        let powerLines = selectedLines(power.combinedOutput, containingAny: ["cpu power", "gpu power", "combined power", "frequency", "active residency", "plimit", "limit"])
+        let combinedPressure = ([processState] + pressureLines).joined(separator: " ").lowercased()
+
         var status: CheckStatus = .pass
         var reason: String?
-        if thermalState == "Serious" || thermalState == "Critical" {
+        if combinedPressure.contains("critical") || combinedPressure.contains("serious") {
             status = .warning
-            reason = "macOS reports \(thermalState.lowercased()) thermal pressure."
-        } else if pmset.exitCode != 0 && powermetrics.exitCode != 0 {
+            reason = "macOS reported serious or critical thermal pressure."
+        } else if combinedPressure.contains("fair") {
+            status = .warning
+            reason = "macOS reported fair thermal pressure, indicating active thermal management."
+        } else if thermal.exitCode != 0 && pmset.exitCode != 0 {
             status = .notAvailable
-            reason = "macOS did not expose thermal command output on this hardware or OS version."
+            reason = "macOS did not expose thermal-pressure evidence on this hardware or OS version."
         }
-        let summary = status == .pass ? "macOS thermal pressure is \(thermalState.lowercased()); \(sensorLines.count) reliable temperature line(s) were exposed." : status == .warning ? "macOS reports elevated thermal pressure." : "Detailed thermal evidence was not available on this Mac."
-        return DiagnosticResult(category: "Thermals", domain: "Network / Power", name: "Thermal pressure and available sensor evidence", status: status, summary: summary, reason: reason, recommendedAction: status == .warning ? "Verify airflow, fan operation, workload, and ambient temperature, then repeat the test after the Mac returns to nominal pressure." : nil, details: ["Process thermal state: \(thermalState)", "pmset thermal evidence: \(SystemUtilities.firstLine(pmset.combinedOutput))", "PCRT does not claim complete temperature-sensor coverage on macOS."] + Array(sensorLines.prefix(30)), durationSeconds: Date().timeIntervalSince(started))
+
+        let summary: String
+        switch status {
+        case .pass: summary = "macOS thermal pressure remained nominal in the available samples."
+        case .warning: summary = "macOS reported elevated thermal pressure or active thermal mitigation."
+        default: summary = "Thermal-pressure evidence was not available on this Mac."
+        }
+
+        var details = [
+            "Process thermal state: \(processState)",
+            "pmset thermal evidence: \(SystemUtilities.firstLine(pmset.combinedOutput))"
+        ]
+        details.append(contentsOf: pressureLines.prefix(20))
+        details.append(contentsOf: powerLines.prefix(50))
+        if power.exitCode != 0 {
+            details.append("CPU/GPU power-frequency telemetry was not available: \(SystemUtilities.firstLine(power.combinedOutput))")
+        }
+        details.append("Thermal pressure is a separate macOS health signal and does not imply that numerical CPU/GPU temperatures were collected.")
+
+        return DiagnosticResult(
+            category: "Thermals",
+            domain: "Workload Stability",
+            name: "Thermal pressure, power, and throttling evidence",
+            status: status,
+            summary: summary,
+            reason: reason,
+            recommendedAction: status == .warning ? "Verify airflow, workload, and ambient temperature, then repeat the test after the Mac returns to nominal thermal pressure." : nil,
+            details: details,
+            durationSeconds: Date().timeIntervalSince(started)
+        )
+    }
+
+    private static func thermalStateName(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: return "Nominal"
+        case .fair: return "Fair"
+        case .serious: return "Serious"
+        case .critical: return "Critical"
+        @unknown default: return "Unknown"
+        }
+    }
+
+    private static func selectedLines(_ output: String, containingAny needles: [String]) -> [String] {
+        var seen = Set<String>()
+        return output.split(whereSeparator: \.isNewline).map(String.init).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lower = trimmed.lowercased()
+            guard !trimmed.isEmpty, needles.contains(where: { lower.contains($0) }), !seen.contains(trimmed) else { return nil }
+            seen.insert(trimmed)
+            return trimmed
+        }
     }
 
     private static func parseRouteValue(_ output: String, key: String) -> String? {

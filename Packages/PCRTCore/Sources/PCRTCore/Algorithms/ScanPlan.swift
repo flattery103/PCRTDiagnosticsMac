@@ -23,6 +23,7 @@ public enum ScanStepIdentifier: String, Codable, CaseIterable {
     case softwareUpdates
     case securityConfiguration
     case rtcProgression
+    case temperatureSensors
     case thermalPressure
 }
 
@@ -45,8 +46,8 @@ public enum ScanPlanner {
     private static let memoryPatterns = ScanPlanStep(.memoryPatterns, "Application-level memory pattern test")
     private static let memoryPressure = ScanPlanStep(.memoryPressure, "Memory pressure workload")
     private static let storage = ScanPlanStep(.storageInventory, "Physical disk, APFS, and volume inventory")
-    private static let filesystem = ScanPlanStep(.filesystemHealth, "Filesystem capacity and mount-state review")
-    private static let smart = ScanPlanStep(.smartHealth, "SMART and native drive-health evidence")
+    private static let filesystem = ScanPlanStep(.filesystemHealth, "Filesystem capacity and live APFS verification")
+    private static let smart = ScanPlanStep(.smartHealth, "Physical-drive SMART, NVMe, and partition-map health")
     private static let physicalRead = ScanPlanStep(.physicalDriveRead, "Read-only physical-drive sampling")
     private static let diskWrite = ScanPlanStep(.diskWriteRead, "Temporary file write/read/SHA-256 verification")
     private static let battery = ScanPlanStep(.batteryPower, "Battery and power status")
@@ -58,20 +59,21 @@ public enum ScanPlanner {
     private static let updates = ScanPlanStep(.softwareUpdates, "Available macOS software updates")
     private static let security = ScanPlanStep(.securityConfiguration, "FileVault, SIP, Gatekeeper, and Secure Boot")
     private static let rtc = ScanPlanStep(.rtcProgression, "RTC progression consistency")
-    private static let thermal = ScanPlanStep(.thermalPressure, "Thermal pressure and available sensor evidence")
+    private static let temperatures = ScanPlanStep(.temperatureSensors, "Numerical temperature coverage")
+    private static let thermal = ScanPlanStep(.thermalPressure, "Thermal pressure, power, and throttling evidence")
 
     public static func plan(for scanType: String, memoryPressurePercent: Int, diskTestMB: Int) -> [ScanPlanStep] {
         let mode = scanType.lowercased().replacingOccurrences(of: "-", with: "")
-        var common = [inventory, cpuInventory, prime, memoryInventory, storage, filesystem, smart, diskWrite, battery, devices, gpu, network, logs, services, updates, security, rtc, thermal]
+        var common = [inventory, cpuInventory, prime, memoryInventory, storage, filesystem, smart, diskWrite, battery, devices, gpu, network, logs, services, updates, security, rtc, temperatures, thermal]
         switch mode {
         case "hardware":
-            return [inventory, cpuInventory, prime, cpuStress, memoryInventory, memoryPatterns, storage, smart, physicalRead, devices, gpu, battery, rtc, thermal, logs]
+            return [inventory, cpuInventory, prime, cpuStress, memoryInventory, memoryPatterns, storage, smart, physicalRead, devices, gpu, battery, rtc, temperatures, thermal, logs]
         case "drive":
-            return [inventory, storage, smart, physicalRead, filesystem, diskWrite, logs]
+            return [inventory, storage, temperatures, smart, physicalRead, filesystem, diskWrite, logs]
         case "thermal":
-            return [inventory, cpuInventory, thermal, cpuStress, thermal, logs]
+            return [inventory, cpuInventory, temperatures, thermal, cpuStress, temperatures, thermal, logs]
         case "gpu":
-            return [inventory, gpu, devices, thermal, logs]
+            return [inventory, gpu, devices, temperatures, thermal, logs]
         case "full", "deep", "burnin":
             common.insert(memoryPatterns, at: 5)
             common.insert(physicalRead, at: 10)

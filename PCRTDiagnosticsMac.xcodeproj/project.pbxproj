@@ -585,7 +585,7 @@
 			<key>lastKnownFileType</key>
 			<string>net.daringfireball.markdown</string>
 			<key>path</key>
-			<string>RELEASE_NOTES_0.1.0.md</string>
+			<string>RELEASE_NOTES_0.1.1.md</string>
 			<key>sourceTree</key>
 			<string>&lt;group&gt;</string>
 		</dict>
@@ -1552,7 +1552,7 @@
 				<key>COMBINE_HIDPI_IMAGES</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>ENABLE_APP_SANDBOX</key>
 				<string>NO</string>
 				<key>ENABLE_HARDENED_RUNTIME</key>
@@ -1567,7 +1567,7 @@
 					<string>@executable_path/../Frameworks</string>
 				</array>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMac</string>
 				<key>PRODUCT_MODULE_NAME</key>
@@ -1595,7 +1595,7 @@
 				<key>COMBINE_HIDPI_IMAGES</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>ENABLE_APP_SANDBOX</key>
 				<string>NO</string>
 				<key>ENABLE_HARDENED_RUNTIME</key>
@@ -1610,7 +1610,7 @@
 					<string>@executable_path/../Frameworks</string>
 				</array>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMac</string>
 				<key>PRODUCT_MODULE_NAME</key>
@@ -1632,13 +1632,13 @@
 				<key>CODE_SIGN_STYLE</key>
 				<string>Automatic</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>ENABLE_HARDENED_RUNTIME</key>
 				<string>NO</string>
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTScannerHelper</string>
 				<key>PRODUCT_NAME</key>
@@ -1660,13 +1660,13 @@
 				<key>CODE_SIGN_STYLE</key>
 				<string>Automatic</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>ENABLE_HARDENED_RUNTIME</key>
 				<string>NO</string>
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTScannerHelper</string>
 				<key>PRODUCT_NAME</key>
@@ -1688,13 +1688,13 @@
 				<key>CODE_SIGN_STYLE</key>
 				<string>Automatic</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MACOSX_DEPLOYMENT_TARGET</key>
 				<string>11.0</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMacTests</string>
 				<key>PRODUCT_NAME</key>
@@ -1714,13 +1714,13 @@
 				<key>CODE_SIGN_STYLE</key>
 				<string>Automatic</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>1</string>
+				<string>2</string>
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>MACOSX_DEPLOYMENT_TARGET</key>
 				<string>11.0</string>
 				<key>MARKETING_VERSION</key>
-				<string>0.1.0</string>
+				<string>0.1.1</string>
 				<key>PRODUCT_BUNDLE_IDENTIFIER</key>
 				<string>com.pcrepairtools.PCRTDiagnosticsMacTests</string>
 				<key>PRODUCT_NAME</key>

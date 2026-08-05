@@ -1,6 +1,6 @@
 # Diagnostic Check Matrix
 
-| Area | Initial macOS 0.1.0 implementation | Typical status policy |
+| Area | macOS 0.1.1 implementation | Typical status policy |
 |---|---|---|
 | macOS inventory | `sw_vers`, `sysctl`, uptime, install history | Info; Incomplete on collector failure |
 | Mac hardware | `system_profiler SPHardwareDataType` | Info; Incomplete if unavailable |

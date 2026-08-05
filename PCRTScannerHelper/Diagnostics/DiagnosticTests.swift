@@ -42,8 +42,38 @@ enum DiagnosticTests {
         let lock = NSLock()
         var batches: UInt64 = 0
         var errors = 0
+        var stopThermalMonitor = false
+        var thermalCounts: [String: Int] = [:]
+        var highestThermalRank = 0
         let input: UInt64 = 10_000
         let expected = DiagnosticAlgorithms.sumOfSquares(input)
+
+        let thermalGroup = DispatchGroup()
+        thermalGroup.enter()
+        DispatchQueue.global(qos: .utility).async {
+            defer { thermalGroup.leave() }
+            while true {
+                lock.lock()
+                let stop = stopThermalMonitor
+                lock.unlock()
+                if stop { break }
+
+                let state: String
+                let rank: Int
+                switch ProcessInfo.processInfo.thermalState {
+                case .nominal: state = "Nominal"; rank = 0
+                case .fair: state = "Fair"; rank = 1
+                case .serious: state = "Serious"; rank = 2
+                case .critical: state = "Critical"; rank = 3
+                @unknown default: state = "Unknown"; rank = 0
+                }
+                lock.lock()
+                thermalCounts[state, default: 0] += 1
+                highestThermalRank = max(highestThermalRank, rank)
+                lock.unlock()
+                Thread.sleep(forTimeInterval: 1)
+            }
+        }
 
         for worker in 0..<workers {
             group.enter()
@@ -66,11 +96,54 @@ enum DiagnosticTests {
             }
         }
         group.wait()
+        lock.lock(); stopThermalMonitor = true; lock.unlock()
+        thermalGroup.wait()
+
         if context.cancellation.isCancelled { throw HelperError.cancelled }
+        let peakThermal = ["Nominal", "Fair", "Serious", "Critical"][min(max(highestThermalRank, 0), 3)]
+        let thermalDetails = ["Nominal", "Fair", "Serious", "Critical"].map { "Thermal samples \($0.lowercased()): \(thermalCounts[$0, default: 0])" }
+        let commonDetails = [
+            "Workers: \(workers)",
+            "Completed deterministic batches: \(batches)",
+            "Calculation errors: \(errors)",
+            "Highest thermal pressure observed during workload: \(peakThermal)"
+        ] + thermalDetails
+
         if errors > 0 {
-            return DiagnosticResult(category: "CPU", domain: "Workload Stability", name: "Multi-core sustained CPU workload", status: .fail, summary: "The sustained CPU workload returned one or more calculation errors.", reason: "Calculation mismatches: \(errors)", recommendedAction: "Repeat the test and verify cooling, power, and CPU stability with Apple Diagnostics.", details: ["Workers: \(workers)", "Completed batches: \(batches)"], durationSeconds: Date().timeIntervalSince(started))
+            return DiagnosticResult(
+                category: "CPU",
+                domain: "Workload Stability",
+                name: "Multi-core sustained CPU workload",
+                status: .fail,
+                summary: "The sustained CPU workload returned one or more calculation errors.",
+                reason: "Calculation mismatches: \(errors)",
+                recommendedAction: "Repeat the test and verify cooling, power, and CPU stability with Apple Diagnostics.",
+                details: commonDetails,
+                durationSeconds: Date().timeIntervalSince(started)
+            )
         }
-        return DiagnosticResult(category: "CPU", domain: "Workload Stability", name: "Multi-core sustained CPU workload", status: .pass, summary: "The CPU sustained a \(minutes)-minute all-core application workload without calculation errors.", details: ["Workers: \(workers)", "Completed deterministic batches: \(batches)", "Calculation errors: 0"], durationSeconds: Date().timeIntervalSince(started))
+        if highestThermalRank >= 2 {
+            return DiagnosticResult(
+                category: "CPU",
+                domain: "Workload Stability",
+                name: "Multi-core sustained CPU workload",
+                status: .warning,
+                summary: "The CPU completed the workload without calculation errors, but macOS reported elevated thermal pressure.",
+                reason: "Highest thermal state during the workload: \(peakThermal).",
+                recommendedAction: "Check airflow and ambient temperature, allow the Mac to cool, and repeat the workload.",
+                details: commonDetails,
+                durationSeconds: Date().timeIntervalSince(started)
+            )
+        }
+        return DiagnosticResult(
+            category: "CPU",
+            domain: "Workload Stability",
+            name: "Multi-core sustained CPU workload",
+            status: .pass,
+            summary: "The CPU sustained a \(minutes)-minute all-core application workload without calculation errors or serious thermal pressure.",
+            details: commonDetails,
+            durationSeconds: Date().timeIntervalSince(started)
+        )
     }
 
     static func memoryPatterns(_ context: DiagnosticContext) throws -> DiagnosticResult {

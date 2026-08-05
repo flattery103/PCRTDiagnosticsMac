@@ -8,6 +8,12 @@ enum MacCollectors {
         let sizeBytes: UInt64
         let model: String
         let internalDisk: Bool
+        let removable: Bool
+        let solidState: Bool
+        let busProtocol: String
+        let smartStatus: String?
+        let healthValues: [String: UInt64]
+        let temperatureCelsius: Double?
     }
 
     static func command(_ context: DiagnosticContext, key: String, executable: String, arguments: [String] = [], timeout: TimeInterval = 60) -> CommandResult {
@@ -24,23 +30,113 @@ enum MacCollectors {
 
     static func physicalDisks(_ context: DiagnosticContext) -> [PhysicalDisk] {
         let result = command(context, key: "diskutil-list-plist", executable: "/usr/sbin/diskutil", arguments: ["list", "-plist"], timeout: 60)
-        guard result.exitCode == 0, let data = result.stdout.data(using: .utf8), let root = SystemUtilities.plistDictionary(data) else { return [] }
-        var output: [PhysicalDisk] = []
-        if let partitions = root["AllDisksAndPartitions"] as? [[String: Any]] {
-            for entry in partitions {
-                guard let identifier = entry["DeviceIdentifier"] as? String,
-                      let size = numericUInt64(entry["Size"]) else { continue }
-                let info = command(context, key: "diskutil-info-\(identifier)", executable: "/usr/sbin/diskutil", arguments: ["info", "-plist", "/dev/\(identifier)"], timeout: 30)
-                var model = ""
-                var internalDisk = false
-                if let infoData = info.stdout.data(using: .utf8), let dict = SystemUtilities.plistDictionary(infoData) {
-                    model = (dict["MediaName"] as? String) ?? (dict["DeviceModel"] as? String) ?? ""
-                    internalDisk = (dict["Internal"] as? Bool) ?? false
-                }
-                output.append(PhysicalDisk(identifier: identifier, sizeBytes: size, model: model, internalDisk: internalDisk))
-            }
+        guard result.exitCode == 0,
+              let data = result.stdout.data(using: .utf8),
+              let root = SystemUtilities.plistDictionary(data),
+              let entries = root["AllDisksAndPartitions"] as? [[String: Any]] else {
+            return []
         }
-        return output
+
+        var output: [PhysicalDisk] = []
+        var seen = Set<String>()
+
+        for entry in entries {
+            guard let identifier = entry["DeviceIdentifier"] as? String,
+                  !seen.contains(identifier) else { continue }
+
+            // APFS containers such as disk1/disk2/disk3 are synthesized whole disks.
+            // Only inspect top-level candidates here, then use diskutil info to retain
+            // actual physical media. This prevents one Apple SSD from appearing as
+            // several independent drives.
+            if entry["APFSPhysicalStores"] != nil { continue }
+            if let content = entry["Content"] as? String,
+               content.localizedCaseInsensitiveContains("APFS_Container") { continue }
+
+            let infoResult = command(
+                context,
+                key: "diskutil-info-\(identifier)",
+                executable: "/usr/sbin/diskutil",
+                arguments: ["info", "-plist", "/dev/\(identifier)"],
+                timeout: 30
+            )
+            guard infoResult.exitCode == 0,
+                  let infoData = infoResult.stdout.data(using: .utf8),
+                  let info = SystemUtilities.plistDictionary(infoData),
+                  (info["WholeDisk"] as? Bool) == true else { continue }
+
+            let virtualOrPhysical = (info["VirtualOrPhysical"] as? String) ?? ""
+            let infoContent = (info["Content"] as? String) ?? ""
+            if virtualOrPhysical.caseInsensitiveCompare("Virtual") == .orderedSame ||
+                infoContent.localizedCaseInsensitiveContains("APFS_Container") {
+                continue
+            }
+
+            // Real media normally has a bus protocol and/or an I/O Registry media
+            // name. Keep Unknown physical status because Apple Silicon internal SSDs
+            // currently report VirtualOrPhysical=Unknown.
+            let busProtocol = (info["BusProtocol"] as? String) ?? "Not reported"
+            let registryName = (info["IORegistryEntryName"] as? String) ?? ""
+            if busProtocol == "Not reported" && registryName.isEmpty && virtualOrPhysical.isEmpty {
+                continue
+            }
+
+            let size = numericUInt64(info["TotalSize"])
+                ?? numericUInt64(info["Size"])
+                ?? numericUInt64(entry["Size"])
+                ?? 0
+            guard size > 0 else { continue }
+
+            let health = nvmeHealthDictionary(info["SMARTDeviceSpecificKeysMayVaryNotGuaranteed"])
+            let temperature = storageTemperatureCelsius(health["TEMPERATURE"])
+            let model = (info["MediaName"] as? String)
+                ?? (info["DeviceModel"] as? String)
+                ?? (registryName.isEmpty ? "Unknown physical disk" : registryName)
+
+            output.append(PhysicalDisk(
+                identifier: identifier,
+                sizeBytes: size,
+                model: model,
+                internalDisk: (info["Internal"] as? Bool) ?? false,
+                removable: (info["Removable"] as? Bool) ?? false,
+                solidState: (info["SolidState"] as? Bool) ?? false,
+                busProtocol: busProtocol,
+                smartStatus: info["SMARTStatus"] as? String,
+                healthValues: health,
+                temperatureCelsius: temperature
+            ))
+            seen.insert(identifier)
+        }
+
+        return output.sorted { $0.identifier.localizedStandardCompare($1.identifier) == .orderedAscending }
+    }
+
+    static func nvmeHealthDictionary(_ value: Any?) -> [String: UInt64] {
+        guard let dictionary = value as? [String: Any] else { return [:] }
+        var result: [String: UInt64] = [:]
+        for (key, item) in dictionary {
+            if let number = numericUInt64(item) { result[key] = number }
+        }
+        return result
+    }
+
+    static func nvmeCounter(_ health: [String: UInt64], base: String) -> UInt64? {
+        if let direct = health[base] { return direct }
+        let low = health[base + "_0"]
+        let high = health[base + "_1"] ?? 0
+        guard low != nil || high != 0 else { return nil }
+        // Current Apple NVMe data exposes a low/high pair. Values used for
+        // diagnostic thresholds are safely representable in UInt64 on real Macs.
+        if high == 0 { return low ?? 0 }
+        return UInt64.max
+    }
+
+    static func storageTemperatureCelsius(_ raw: UInt64?) -> Double? {
+        guard let raw else { return nil }
+        let value = Double(raw)
+        if value >= 200 && value <= 500 { return value - 273.15 } // Kelvin, as exposed by Apple NVMe
+        if value >= 0 && value <= 125 { return value }            // Celsius on some controllers
+        if value >= 2_000 && value <= 5_000 { return value / 10.0 - 273.15 }
+        return nil
     }
 
     static func numericUInt64(_ value: Any?) -> UInt64? {

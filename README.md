@@ -1,8 +1,12 @@
-# PCRT Diagnostics for macOS 0.1.0
+# PCRT Diagnostics for macOS 0.1.1
 
 Native SwiftUI macOS client for the PCRT Diagnostics Server 0.1.4 API.
 
 This repository contains the complete source project for the first macOS client. It is designed as a portable `PCRT Diagnostics.app` with a bundled, temporary privileged scanner helper. The helper is launched only after the user clicks **Start** and approves the macOS administrator prompt. It is not installed as a daemon, launch agent, login item, or permanent privileged helper.
+
+## 0.1.1 focus: thermals and physical-drive health
+
+Version 0.1.1 corrects APFS synthesized-device counting, maps actual physical drives, parses native Apple NVMe health fields and storage temperature, verifies physical partition maps and the live root APFS volume, and limits raw sampling to validated physical media. Thermal reporting now separates numerical temperature coverage from macOS thermal-pressure status and records thermal state throughout the sustained CPU workload. See [`docs/THERMAL_STORAGE_0.1.1.md`](docs/THERMAL_STORAGE_0.1.1.md).
 
 ## Configured deployment targets
 
@@ -78,7 +82,7 @@ chmod +x Scripts/*.sh
 The expected output is:
 
 ```text
-build/release/PCRTDiagnosticsMac-0.1.0.zip
+build/release/PCRTDiagnosticsMac-0.1.1.zip
 ```
 
 ## Status policy
@@ -90,7 +94,7 @@ build/release/PCRTDiagnosticsMac-0.1.0.zip
 
 ## Current validation status
 
-The shared `PCRTCore` Swift package contains platform-independent unit tests. The macOS application and helper require Xcode and a macOS test system for compilation and runtime validation. See `RELEASE_NOTES_0.1.0.md` for the beta validation scope.
+The shared `PCRTCore` Swift package contains platform-independent unit tests. The macOS application and helper require Xcode and a macOS test system for compilation and runtime validation. See `RELEASE_NOTES_0.1.1.md` for the beta validation scope.
 
 ## License
 

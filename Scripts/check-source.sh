@@ -14,48 +14,30 @@ import plistlib
 import sys
 
 version = sys.argv[1]
-
-spec = importlib.util.spec_from_file_location(
-    "pbxvalidator",
-    "Scripts/validate-pbx.py"
-)
+spec = importlib.util.spec_from_file_location("pbxvalidator", "Scripts/validate-pbx.py")
 module = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(module)
-
 path = Path("PCRTDiagnosticsMac.xcodeproj/project.pbxproj")
 data = path.read_bytes()
 stripped = data.lstrip()
-
 if stripped.startswith(b"<?xml") or data.startswith(b"bplist"):
     root = plistlib.loads(data)
 else:
-    root = module.Parser(
-        module.tokenize(data.decode("utf-8"))
-    ).value()
-
-objects = root.get("objects", {})
+    root = module.Parser(module.tokenize(data.decode("utf-8"))).value()
 versions = set()
-
-for obj in objects.values():
-    if not isinstance(obj, dict):
-        continue
-    if obj.get("isa") != "XCBuildConfiguration":
-        continue
-
-    settings = obj.get("buildSettings")
-    if isinstance(settings, dict):
-        found = settings.get("MARKETING_VERSION")
-        if found:
-            versions.add(found)
-
+for obj in root.get("objects", {}).values():
+    if isinstance(obj, dict) and obj.get("isa") == "XCBuildConfiguration":
+        settings = obj.get("buildSettings")
+        if isinstance(settings, dict) and settings.get("MARKETING_VERSION"):
+            versions.add(str(settings["MARKETING_VERSION"]))
 if version not in versions:
-    raise SystemExit(
-        f"Xcode MARKETING_VERSION does not match {version}; "
-        f"found {sorted(versions)}"
-    )
+    raise SystemExit(f"Xcode MARKETING_VERSION does not match {version}; found {sorted(versions)}")
 PY_CHECK_VERSION
-grep -q "# PCRT Diagnostics for macOS $VERSION" RELEASE_NOTES_0.1.0.md || {
+
+RELEASE_NOTES="RELEASE_NOTES_${VERSION}.md"
+[[ -f "$RELEASE_NOTES" ]] || { echo "Missing $RELEASE_NOTES" >&2; exit 1; }
+grep -q "# PCRT Diagnostics for macOS $VERSION" "$RELEASE_NOTES" || {
   echo "Release notes version does not match $VERSION" >&2
   exit 1
 }

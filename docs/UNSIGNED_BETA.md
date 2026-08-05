@@ -4,7 +4,7 @@ Unsigned beta builds are intended only for trusted testers who obtained the ZIP 
 
 ## First opening
 
-1. Extract `PCRTDiagnosticsMac-0.1.0.zip`.
+1. Extract `PCRTDiagnosticsMac-0.1.1.zip`.
 2. Move `PCRT Diagnostics.app` to a normal writable location such as `/Applications` or the Desktop.
 3. Control-click or right-click `PCRT Diagnostics.app`.
 4. Choose **Open**.
@@ -32,8 +32,8 @@ The authorization dialog is used to run the bundled helper for the current scan.
 From Terminal in the download folder:
 
 ```bash
-shasum -a 256 PCRTDiagnosticsMac-0.1.0.zip
-cat PCRTDiagnosticsMac-0.1.0.zip.sha256
+shasum -a 256 PCRTDiagnosticsMac-0.1.1.zip
+cat PCRTDiagnosticsMac-0.1.1.zip.sha256
 ```
 
 The values should match exactly.

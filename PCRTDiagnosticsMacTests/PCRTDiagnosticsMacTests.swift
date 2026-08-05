@@ -3,7 +3,7 @@ import PCRTCore
 
 final class PCRTDiagnosticsMacProjectTests: XCTestCase {
     func testProductVersionAndExpectedReports() {
-        XCTAssertEqual(PCRTProduct.version, "0.1.0")
+        XCTAssertEqual(PCRTProduct.version, "0.1.1")
         XCTAssertEqual(PCRTProduct.expectedReportNames, ["system-info.html", "test-results.html", "raw-data.json", "run-log.txt"])
     }
 

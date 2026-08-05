@@ -38,8 +38,8 @@ No secrets are required. When the signing secret set is incomplete, the workflow
 After a successful normal workflow run, create a tag matching the project version:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 The tag workflow validates that the tag version matches `PCRTProduct.version` before attaching the ZIP to the release.
@@ -47,14 +47,14 @@ The tag workflow validates that the tag version matches `PCRTProduct.version` be
 ## Artifact name
 
 ```text
-PCRTDiagnosticsMac-0.1.0
+PCRTDiagnosticsMac-0.1.1
 ```
 
 The contained files are:
 
 ```text
-PCRTDiagnosticsMac-0.1.0.zip
-PCRTDiagnosticsMac-0.1.0.zip.sha256
+PCRTDiagnosticsMac-0.1.1.zip
+PCRTDiagnosticsMac-0.1.1.zip.sha256
 ```
 
 ## Xcode image maintenance

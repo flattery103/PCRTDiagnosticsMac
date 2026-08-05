@@ -106,18 +106,10 @@ final class HelperSessionController {
             guard let self = self, self.connection == nil else { return }
             let startupOutput = (try? String(contentsOf: self.helperStartupLogURL, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-            let detail: String
-            if startupOutput.isEmpty {
-                detail = "No helper output was captured. Startup log: \(self.helperStartupLogURL.path)"
-            } else {
-                detail = "Helper startup output: \(startupOutput)"
-            }
-
-            onFailure(ServerAPIError(
-                statusCode: nil,
-                message: "The privileged helper did not connect after administrator authorization. \(detail)"
-            ))
+            let detail = startupOutput.isEmpty
+                ? "No helper output was captured. Startup log: \(self.helperStartupLogURL.path)"
+                : "Helper startup output: \(startupOutput)"
+            onFailure(ServerAPIError(statusCode: nil, message: "The privileged helper did not connect after administrator authorization. \(detail)"))
             self.stop()
         }
         connectionTimeout = timeout
@@ -181,29 +173,15 @@ final class HelperSessionController {
             "--uid", String(getuid()),
             "--workspace", workspaceURL.path
         ]
-
         let helperCommand = arguments.map(shellQuote).joined(separator: " ")
+        let privilegedCommand = "\(helperCommand) </dev/null >>\(shellQuote(helperStartupLogURL.path)) 2>&1"
+        let source = "do shell script \(appleScriptLiteral(privilegedCommand)) with administrator privileges"
 
-        // Run the helper directly as the elevated AppleScript command.
-        // Do not use nohup or "&"; AppleScript owns the temporary root process.
-        let privilegedCommand =
-            "\(helperCommand) </dev/null >>\(shellQuote(helperStartupLogURL.path)) 2>&1"
-
-        let source =
-            "do shell script \(appleScriptLiteral(privilegedCommand)) with administrator privileges"
-
-        // AppleScript remains active while the helper runs, so execute it away
-        // from the main queue to keep the SwiftUI interface responsive.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-
             var errorInfo: NSDictionary?
             let result = NSAppleScript(source: source)?.executeAndReturnError(&errorInfo)
-
-            // Once the helper connected, socket IPC handles runtime failures.
-            // Do not report the AppleScript exit again when the helper finishes.
             let connected = self.connection != nil || self.validatedHello
-
             let startupOutput =
                 (try? String(contentsOf: self.helperStartupLogURL, encoding: .utf8))?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -214,15 +192,10 @@ final class HelperSessionController {
                     let baseMessage =
                         (errorInfo?["NSAppleScriptErrorMessage"] as? String)
                         ?? "Administrator authorization was cancelled or the privileged helper exited before connecting."
-
                     let message = startupOutput.isEmpty
                         ? baseMessage
                         : "\(baseMessage) Helper output: \(startupOutput)"
-
-                    completion(.failure(ServerAPIError(
-                        statusCode: number,
-                        message: message
-                    )))
+                    completion(.failure(ServerAPIError(statusCode: number, message: message)))
                 } else {
                     completion(.success(()))
                 }

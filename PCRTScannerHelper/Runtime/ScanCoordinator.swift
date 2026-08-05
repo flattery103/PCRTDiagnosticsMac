@@ -68,6 +68,7 @@ final class ScanCoordinator {
         case .softwareUpdates: return MacCollectors.softwareUpdates(context)
         case .securityConfiguration: return MacCollectors.securityConfiguration(context)
         case .rtcProgression: return DiagnosticTests.rtcProgression(context)
+        case .temperatureSensors: return MacCollectors.temperatureSensors(context)
         case .thermalPressure: return MacCollectors.thermalPressure(context)
         }
     }

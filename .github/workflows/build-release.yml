@@ -195,5 +195,5 @@ jobs:
           else
             gh release create "$TAG" release-assets/* \
               --title "PCRT Diagnostics for macOS $VERSION" \
-              --notes-file RELEASE_NOTES_0.1.0.md
+              --notes-file RELEASE_NOTES_0.1.1.md
           fi

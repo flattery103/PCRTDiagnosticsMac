@@ -48,7 +48,7 @@ final class PCRTCoreTests: XCTestCase {
     }
 
     func testReportsContainExpectedEvidenceBehavior() throws {
-        var run = DiagnosticRun(version: "0.1.0", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
+        var run = DiagnosticRun(version: "0.1.1", platform: "macOS/arm64", computerName: "Test-Mac", mode: "quick", modeDisplayName: "Quick")
         run.results = [
             DiagnosticResult(category: "CPU", domain: "Hardware Functional", name: "CPU test", status: .pass, summary: "Passed", details: ["Evidence"]),
             DiagnosticResult(category: "Storage", domain: "Hardware Functional", name: "Disk test", status: .incomplete, summary: "Unavailable", details: ["Access denied"])
@@ -60,4 +60,17 @@ final class PCRTCoreTests: XCTestCase {
         XCTAssertTrue(html.contains("<details open>"))
         XCTAssertTrue(html.contains("<details><summary>Technical evidence"))
     }
+    func testThermalAndDrivePlansIncludeNewEvidence() {
+        let thermal = ScanPlanner.plan(for: "thermal", memoryPressurePercent: 0, diskTestMB: 0).map(\.identifier)
+        XCTAssertTrue(thermal.contains(.temperatureSensors))
+        XCTAssertTrue(thermal.contains(.thermalPressure))
+        XCTAssertTrue(thermal.contains(.cpuWorkload))
+
+        let drive = ScanPlanner.plan(for: "drive", memoryPressurePercent: 0, diskTestMB: 1024).map(\.identifier)
+        XCTAssertTrue(drive.contains(.temperatureSensors))
+        XCTAssertTrue(drive.contains(.smartHealth))
+        XCTAssertTrue(drive.contains(.physicalDriveRead))
+        XCTAssertTrue(drive.contains(.filesystemHealth))
+    }
+
 }

@@ -68,52 +68,132 @@ extension MacCollectors {
     static func storageInventory(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
         let list = command(context, key: "diskutil-list-full-plist", executable: "/usr/sbin/diskutil", arguments: ["list", "-plist"], timeout: 60)
+        let physicalList = command(context, key: "diskutil-list-physical", executable: "/usr/sbin/diskutil", arguments: ["list", "physical"], timeout: 60)
         let apfs = command(context, key: "diskutil-apfs-list-plist", executable: "/usr/sbin/diskutil", arguments: ["apfs", "list", "-plist"], timeout: 90)
         let disks = physicalDisks(context)
-        var rows: [[String]] = disks.map { ["/dev/\($0.identifier)", $0.model, SystemUtilities.humanBytes($0.sizeBytes), $0.internalDisk ? "Internal" : "External"] }
-        if rows.isEmpty, let data = list.stdout.data(using: .utf8), let root = SystemUtilities.plistDictionary(data), let all = root["AllDisks"] as? [String] {
-            rows = all.map { ["/dev/\($0)", "", "", ""] }
+
+        let rows: [[String]] = disks.map { disk in
+            [
+                "/dev/\(disk.identifier)",
+                disk.model,
+                SystemUtilities.humanBytes(disk.sizeBytes),
+                disk.busProtocol,
+                disk.solidState ? "Solid state" : "Rotational/other",
+                disk.internalDisk ? "Internal" : disk.removable ? "Removable" : "External",
+                disk.smartStatus ?? "Not reported",
+                disk.temperatureCelsius.map { String(format: "%.1f °C", $0) } ?? "Not available"
+            ]
         }
+
         let apfsContainers: Int
-        if let data = apfs.stdout.data(using: .utf8), let root = SystemUtilities.plistDictionary(data), let containers = root["Containers"] as? [Any] { apfsContainers = containers.count } else { apfsContainers = 0 }
-        context.appendInventory(InventorySection(title: "Storage", items: ["Physical whole disks": "\(disks.count)", "APFS containers": "\(apfsContainers)"], tables: [InventoryTable(title: "Physical disks", columns: ["Device", "Model", "Size", "Location"], rows: rows)]))
+        if let data = apfs.stdout.data(using: .utf8),
+           let root = SystemUtilities.plistDictionary(data),
+           let containers = root["Containers"] as? [Any] {
+            apfsContainers = containers.count
+        } else {
+            apfsContainers = 0
+        }
+
+        context.appendInventory(InventorySection(
+            title: "Storage",
+            items: [
+                "Physical disks": "\(disks.count)",
+                "APFS containers": "\(apfsContainers)",
+                "Physical diskutil inventory": SystemUtilities.firstLine(physicalList.stdout)
+            ],
+            tables: [InventoryTable(
+                title: "Physical disks",
+                columns: ["Device", "Model", "Size", "Protocol", "Media", "Location", "SMART", "Temperature"],
+                rows: rows
+            )]
+        ))
+
         let status: CheckStatus = list.exitCode == 0 && !rows.isEmpty ? .info : .incomplete
-        return DiagnosticResult(category: "Storage", domain: "Hardware Functional", name: "Physical disk, APFS, and volume inventory", status: status, summary: status == .info ? "Collected physical disk, APFS container, partition, and volume information." : "macOS did not return a complete storage inventory.", details: ["Whole disks reported: \(disks.count)", "APFS containers reported: \(apfsContainers)"], durationSeconds: Date().timeIntervalSince(started))
+        return DiagnosticResult(
+            category: "Storage",
+            domain: "Hardware Functional",
+            name: "Physical disk, APFS, and volume inventory",
+            status: status,
+            summary: status == .info ? "Mapped actual physical media separately from synthesized APFS containers and volumes." : "macOS did not return a complete physical-storage inventory.",
+            reason: status == .incomplete ? "No validated physical-media entries were parsed; synthesized APFS devices were not counted as separate drives." : nil,
+            details: [
+                "Physical drives reported: \(disks.count)",
+                "APFS containers reported: \(apfsContainers)",
+                "Synthesized APFS whole disks are intentionally excluded from the physical-drive count."
+            ],
+            durationSeconds: Date().timeIntervalSince(started)
+        )
     }
 
     static func filesystemHealth(_ context: DiagnosticContext) -> DiagnosticResult {
         let started = Date()
         let df = command(context, key: "df-k", executable: "/bin/df", arguments: ["-k"])
         let mount = command(context, key: "mount", executable: "/sbin/mount")
+        let verify = command(context, key: "diskutil-verify-root-volume", executable: "/usr/sbin/diskutil", arguments: ["verifyVolume", "/"], timeout: 240)
         let rootURL = URL(fileURLWithPath: "/")
         let values = try? rootURL.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeIsReadOnlyKey, .volumeLocalizedFormatDescriptionKey])
         let total = UInt64(max(values?.volumeTotalCapacity ?? 0, 0))
         let available = UInt64(max(values?.volumeAvailableCapacityForImportantUsage ?? 0, 0))
         let percent = total > 0 ? Double(available) * 100 / Double(total) : 0
         let readOnly = values?.volumeIsReadOnly ?? false
+        let verifyText = verify.combinedOutput
+
         var status: CheckStatus = .pass
-        var reason: String?
-        if readOnly {
-            status = .warning
-            reason = "The root data volume is read-only or was reported as read-only."
-        } else if total == 0 {
+        var reasons: [String] = []
+        if verifyText.localizedCaseInsensitiveContains("corrupt") ||
+            verifyText.localizedCaseInsensitiveContains("file system check exit code is 8") ||
+            verifyText.localizedCaseInsensitiveContains("problems were found") {
+            status = .fail
+            reasons.append("Live filesystem verification reported corruption or an unsuccessful filesystem check.")
+        } else if verify.exitCode != 0 || verify.timedOut {
             status = .incomplete
-            reason = "Root filesystem capacity could not be determined."
-        } else if percent < 2 {
-            status = .warning
-            reason = String(format: "The root filesystem has only %.1f%% available.", percent)
-        } else if percent < 10 {
-            status = .warning
-            reason = String(format: "The root filesystem has only %.1f%% available.", percent)
+            reasons.append("Live APFS/filesystem verification could not be completed; this alone is not proof of disk failure.")
         }
-        context.appendInventory(InventorySection(title: "Filesystem", items: ["Root format": values?.volumeLocalizedFormatDescription ?? "Unknown", "Root total": SystemUtilities.humanBytes(total), "Root available": SystemUtilities.humanBytes(available), "Root available percent": String(format: "%.1f%%", percent), "Root read-only": readOnly ? "Yes" : "No"]))
+        if readOnly {
+            if status != .fail { status = .warning }
+            reasons.append("The root data volume was reported as read-only.")
+        } else if total == 0 {
+            if status != .fail { status = .incomplete }
+            reasons.append("Root filesystem capacity could not be determined.")
+        } else if percent < 10 {
+            if status != .fail { status = .warning }
+            reasons.append(String(format: "The root filesystem has only %.1f%% available.", percent))
+        }
+
+        context.appendInventory(InventorySection(
+            title: "Filesystems",
+            items: [
+                "Root format": values?.volumeLocalizedFormatDescription ?? "Unknown",
+                "Root capacity": SystemUtilities.humanBytes(total),
+                "Root available": SystemUtilities.humanBytes(available),
+                "Root available percent": String(format: "%.1f%%", percent),
+                "Live verification": verify.exitCode == 0 ? "Completed successfully" : verify.timedOut ? "Timed out" : "Exit \(verify.exitCode)"
+            ]
+        ))
+
         let summary: String
         switch status {
-        case .pass: summary = "The root filesystem has adequate free space and is writable."
-        case .warning: summary = "The root filesystem has low free space."
-        case .fail: summary = "The root filesystem has a confirmed functional failure."
-        default: summary = "Filesystem capacity or mount state could not be fully reviewed."
+        case .pass: summary = "The root filesystem has adequate free space and live APFS/filesystem verification completed successfully."
+        case .fail: summary = "Live filesystem verification reported confirmed filesystem damage."
+        case .warning: summary = "The root filesystem requires capacity or mount-state review."
+        default: summary = "Filesystem capacity or live verification evidence was incomplete."
         }
-        return DiagnosticResult(category: "Storage", domain: "macOS Maintenance", name: "Filesystem capacity and mount-state review", status: status, summary: summary, reason: reason, recommendedAction: status == .warning ? "Free disk space or review the mount state before returning the Mac to service. This maintenance condition is not scored as hardware failure." : status == .fail ? "Back up important data and correct the confirmed filesystem failure before returning the Mac to service." : nil, details: [SystemUtilities.firstLine(df.stdout), SystemUtilities.firstLine(mount.stdout)].filter { !$0.isEmpty }, durationSeconds: Date().timeIntervalSince(started))
+
+        return DiagnosticResult(
+            category: "Storage",
+            domain: "Hardware Functional",
+            name: "Filesystem capacity and live APFS verification",
+            status: status,
+            summary: summary,
+            reason: reasons.isEmpty ? nil : reasons.joined(separator: " "),
+            recommendedAction: status == .fail ? "Back up important data immediately and run Disk Utility First Aid from Recovery or follow an approved repair workflow." : status == .warning ? "Free space or review the mount state before returning the Mac to service." : nil,
+            details: [
+                SystemUtilities.firstLine(df.stdout),
+                mount.stdout.split(whereSeparator: \.isNewline).map(String.init).first(where: { $0.contains(" on / ") || $0.contains(" on /(") }) ?? "Root mount line not parsed",
+                "Live verification: \(SystemUtilities.firstLine(verifyText))"
+            ],
+            durationSeconds: Date().timeIntervalSince(started)
+        )
     }
+
 }
